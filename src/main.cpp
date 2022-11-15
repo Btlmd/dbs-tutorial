@@ -2,7 +2,6 @@
 #include <iostream>
 #include <string>
 #include <vector>
-#include <sstream>
 
 #include <antlr4-runtime.h>
 #include <cpp-terminal/input.hpp>
