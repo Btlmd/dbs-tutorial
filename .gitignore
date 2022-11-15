@@ -1,0 +1,9 @@
+.idea
+
+# build directories
+cmake-build-debug
+build
+
+# auto generated files
+src/grammar/*
+!src/grammar/SQL.g4
