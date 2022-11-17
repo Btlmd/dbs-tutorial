@@ -3,10 +3,18 @@ project(dbs_tutorial)
 
 set(CMAKE_CXX_STANDARD 20)
 
+if (NOT UNIX OR APPLE)
+    message(FATAL_ERROR "Only support Linux")
+endif()
+
 # libraries
-add_subdirectory(external/antlr4)
+include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
+conan_basic_setup()
 add_subdirectory(external/cpp-terminal)
-list(APPEND LIBS cpp-terminal antlr4)
+list(APPEND LIBS cpp-terminal ${CONAN_LIBS})
+
+# Generate grammar CPP files
+execute_process(COMMAND ${PROJECT_SOURCE_DIR}/utils/generate_grammar.sh)
 
 # project source
 file(GLOB_RECURSE dbms_source src/**/*.cpp)

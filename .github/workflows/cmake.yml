@@ -11,23 +11,23 @@ env:
 jobs:
   build:
 #    runs-on: self-hosted
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
     - uses: actions/checkout@v2
-
-    - name: Setup Environment
-      run: ${{github.workspace}}/utils/setup_env.sh
+      with:
+        submodules: recursive
 
     - name: System Info
       run: |
+        python --version
         gcc --version
         g++ --version
         cmake --version        
         java -version
 
-    - name: Genarate Grammar CPP Files
-      run: ${{github.workspace}}/utils/generate_grammar.sh
+    - name: Install Conan
+      run: pip install canon
 
     - name: Configure CMake
       run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}

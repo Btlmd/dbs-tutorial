@@ -1,0 +1,7 @@
+[requires]
+boost/1.80.0
+antlr4-cppruntime/4.9.3
+fmt/9.1.0
+
+[generators]
+cmake

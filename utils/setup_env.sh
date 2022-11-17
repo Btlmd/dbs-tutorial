@@ -14,3 +14,6 @@ ln -s "$(pwd)"/cmake-3.25.0-rc4-linux-x86_64/bin/* /usr/local/bin
 
 # JRE
 sudo apt install default-jre
+
+# Canon
+pip install conan
