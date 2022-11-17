@@ -11,7 +11,9 @@ endif()
 include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
 conan_basic_setup()
 add_subdirectory(external/cpp-terminal)
-list(APPEND LIBS cpp-terminal ${CONAN_LIBS})
+list(APPEND LIBS cpp-terminal antlr4-runtime fmt)
+FIND_PACKAGE( Boost 1.80 REQUIRED )
+include_directories(${Boost_INCLUDE_DIR})
 
 # Generate grammar CPP files
 execute_process(COMMAND ${PROJECT_SOURCE_DIR}/utils/generate_grammar.sh)
@@ -22,15 +24,8 @@ add_executable(main src/main.cpp ${dbms_source})
 target_link_libraries(main ${LIBS})
 target_include_directories(main PUBLIC src)
 
-# google test
-include(FetchContent)
-FetchContent_Declare(
-    googletest
-    URL https://github.com/google/googletest/archive/0e6aac2571eb1753b8855d8d1f592df64d1a4828.zip
-)
-FetchContent_MakeAvailable(googletest)
-include(GoogleTest)
 enable_testing()
+find_package(GTest)
 function(GTEST TEST_NAME)
     add_executable(${TEST_NAME} tests/${TEST_NAME}.cpp)
     target_link_libraries(${TEST_NAME} ${LIBS} GTest::gtest_main)
