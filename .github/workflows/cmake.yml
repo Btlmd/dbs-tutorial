@@ -32,6 +32,7 @@ jobs:
         pip install "conan<2.0"
         conan profile new default --detect
         conan profile update settings.compiler.libcxx=libstdc++11 default
+        mkdir $BUILD_DIR
         pushd $BUILD_DIR
         conan install ${{github.workspace}} 
         popd
