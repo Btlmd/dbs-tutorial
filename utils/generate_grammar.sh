@@ -27,7 +27,7 @@ if [ ! -f $CACHE_FILE ]; then
 fi
 
 CMD="java -jar $CACHE_FILE -Werror -Dlanguage=Cpp -no-listener -visitor -o $GRAMMAR_DIR $GRAMMAR_DIR/SQL.g4"
-echo "$CMD"; eval $CMD
+echo " > $CMD"; eval $CMD
 
 echo " > Grammar CPP files generated successfully"
 #ls $GRAMMAR_DIR

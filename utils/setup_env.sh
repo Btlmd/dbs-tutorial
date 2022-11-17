@@ -17,3 +17,7 @@ sudo apt install default-jre
 
 # Canon
 pip install conan
+conan profile update settings.compiler.libcxx=libstdc++11 default
+pushd cmake-build-debug || exit 1
+conan install ..
+popd || exit 1
