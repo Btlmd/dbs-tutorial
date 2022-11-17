@@ -27,12 +27,18 @@ jobs:
         cmake --version        
         java -version
 
+    - name: Configure GCC/G++ 11
+      run: |
+        sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+        sudo apt-get install -y g++-11
+        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 50
+        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 50
+
     - name: Configure Conan
       run: |
         pip install "conan<2.0"
         conan profile new default --detect
         conan profile update settings.compiler.libcxx=libstdc++11 default
-        conan profile update settings.compiler.version=11 default
         mkdir $BUILD_DIR
         pushd $BUILD_DIR
         conan install ${{github.workspace}} 
