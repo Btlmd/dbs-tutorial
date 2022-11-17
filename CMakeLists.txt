@@ -7,13 +7,22 @@ if (NOT UNIX OR APPLE)
     message(FATAL_ERROR "Only support Linux")
 endif()
 
-# libraries
-include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
-conan_basic_setup()
-add_subdirectory(external/cpp-terminal)
+# Libraries
+    # From conan
+    include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
+    conan_basic_setup()
+        # Boost
+        FIND_PACKAGE( Boost 1.80 REQUIRED )
+        include_directories(${Boost_INCLUDE_DIR})
+
+    # From ./external
+        # cpp-terminal
+        set(CPPTERMINAL_ENABLE_TESING OFF CACHE BOOL "Disable test to avoid conflict" FORCE)
+        set(CPPTERMINAL_BUILD_EXAMPLES OFF CACHE BOOL "Disable examples" FORCE)
+        set(CPPTERMINAL_ENABLE_INSTALL OFF CACHE BOOL "Disable install" FORCE)
+        add_subdirectory(external/cpp-terminal)
+# All libraries
 list(APPEND LIBS cpp-terminal antlr4-runtime fmt)
-FIND_PACKAGE( Boost 1.80 REQUIRED )
-include_directories(${Boost_INCLUDE_DIR})
 
 # Generate grammar CPP files
 execute_process(COMMAND ${PROJECT_SOURCE_DIR}/utils/generate_grammar.sh)
