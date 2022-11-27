@@ -2,43 +2,135 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <chrono>
+#include <ctime>
 
 #include <antlr4-runtime.h>
 #include <cpp-terminal/input.hpp>
 #include <cpp-terminal/prompt.hpp>
+#include <fmt/chrono.h>
+#include <boost/log/core.hpp>
+#include <boost/log/trivial.hpp>
+#include <boost/log/expressions.hpp>
+#include <boost/log/utility/setup/file.hpp>
+#include <boost/date_time/posix_time/posix_time_types.hpp>
+#include <boost/log/sources/severity_logger.hpp>
+#include <boost/log/sources/record_ostream.hpp>
+#include <boost/log/utility/setup/file.hpp>
+#include <boost/log/utility/setup/common_attributes.hpp>
+#include <boost/log/support/date_time.hpp>
+#include <boost/log/sinks/text_ostream_backend.hpp>
+#include <boost/shared_ptr.hpp>
+#include <boost/lambda/lambda.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/log/common.hpp>
+#include <boost/log/attributes.hpp>
+#include <boost/log/sinks.hpp>
+#include <boost/log/sources/logger.hpp>
 
+#include <defines.h>
 #include <grammar/SQLLexer.h>
 #include <grammar/SQLParser.h>
+#include "system/DBVisitor.h"
+#include <system/DBSystem.h>
+#include <exception/OperationException.h>
 
+namespace logging = boost::log;
+namespace expr = boost::log::expressions;
+namespace sinks = boost::log::sinks;
 using Term::Key;
 using Term::prompt_multiline;
 using Term::Terminal;
 
-void process_input(std::string &in_string) {
-    antlr4::ANTLRInputStream input{in_string};
-    SQLLexer lexer{&input};
-    antlr4::CommonTokenStream tokens(&lexer);
-
-    tokens.fill();
-    for (auto token: tokens.getTokens()) {
-        std::cout << token->toString() << std::endl;
-    }
-
-    SQLParser parser{&tokens};
-    antlr4::tree::ParseTree *tree{parser.program()};
-
-    std::cout << "Syntax Tree:" << tree->toStringTree(&parser) << std::endl << std::endl;
+void process_input(std::string &in_string, DBVisitor &visitor) {
+//    try {
+        antlr4::ANTLRInputStream input{in_string};
+        SQLLexer lexer{&input};
+        antlr4::CommonTokenStream tokens(&lexer);
+        tokens.fill();
+        SQLParser parser{&tokens};
+        antlr4::tree::ParseTree *tree{parser.program()};
+        TraceLog << "Syntax Tree:" << tree->toStringTree(&parser);
+        auto results{tree->accept(&visitor)};
+        for (auto &result: *results.as<ResultList *>()) {
+            auto result_ptr = result.as<Result *>();
+            std::cout << result_ptr->ToString() << std::endl;
+            delete result_ptr;
+        }
+//    } catch (const OperationError &e) {
+//        std::cout << e.what() << std::endl;
+//    }
 }
 
+void init_logger() {
+    boost::shared_ptr<logging::core> core = logging::core::get();
+    typedef sinks::synchronous_sink<sinks::text_ostream_backend> sink_t;
+
+    boost::shared_ptr<sinks::text_ostream_backend> backend =
+            boost::make_shared<sinks::text_ostream_backend>();
+    backend->add_stream(
+            boost::shared_ptr<std::ostream>(
+                    new std::ofstream(
+                            fmt::format(LOGGING_PATTERN, fmt::localtime(std::time(nullptr)))
+                    )
+            )
+    );
+
+    // auto-flush
+    backend->auto_flush(true);
+    boost::shared_ptr<sink_t> sink(new sink_t(backend));
+
+    // logging format
+    sink->set_formatter(
+            expr::format("%1% [%2%] %3%")
+            % expr::attr<boost::posix_time::ptime>("TimeStamp")
+            % logging::trivial::severity
+            % expr::smessage
+    );
+    core->add_sink(sink);
+    core->set_filter(logging::trivial::severity >= SEVERITY);
+    logging::add_common_attributes();
+}
+
+//int main() {
+//    init_logger();
+//
+//    // init system
+//    auto dbms = DBSystem{};
+//    DBVisitor visitor{dbms};
+//
+//    std::string batch{"CREATE DATABASE TESTDB;"};
+//    process_input(batch, visitor);
+//    return 0;
+//
+//}
 int main() {
-    try {
+    init_logger();
+    auto dbms = DBSystem{};
+    DBVisitor visitor{dbms};
+//    try {
+#ifdef DEBUG
+        {
+#else
         if (!Term::stdin_connected()) {
-            std::stringstream stdin_stream{Term::read_stdin()};
-            std::string batch;
-            while (stdin_stream >> batch) {
-                process_input(batch);
-            }
+#endif
+            std::string batch {"CREATE TABLE scholars(\n"
+                               "     int_f0 INT,\n"
+                               "     int_f1 INT,\n"
+                               "     vc_f VARCHAR(20) NOT NULL,\n"
+                               "     float_f FLOAT,\n"
+                               "\n"
+                               "     PRIMARY KEY pk_name (int_f0, int_f1),\n"
+                               "    FOREIGN KEY fk_name (int_f0, int_f1) REFERENCES tt(int_f2, int_f3)\n"
+                               ");"};
+            process_input(batch, visitor);
+//            for (std::string batch; std::getline(std::cin, batch); )
+//            {
+//                process_input(batch, visitor);
+//            }
+#ifdef DEBUG
             return 0;
+#endif
         }
 
         Terminal term{false, true, false, false};
@@ -65,14 +157,14 @@ int main() {
                 std::cout << "Bye :)" << std::endl;
                 break;
             }
-            process_input(answer);
+            process_input(answer, visitor);
         }
-    } catch (const std::runtime_error &re) {
-        std::cerr << "Runtime error: " << re.what() << std::endl;
-        return 2;
-    } catch (...) {
-        std::cerr << "Unknown error." << std::endl;
-        return 1;
-    }
+//    } catch (const std::runtime_error &re) {
+//        std::cerr << "Runtime error: " << re.what() << std::endl;
+//        return 2;
+//    } catch (...) {
+//        std::cerr << "Unknown error." << std::endl;
+//        return 1;
+//    }
     return 0;
 }

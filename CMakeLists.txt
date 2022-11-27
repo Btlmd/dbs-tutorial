@@ -7,12 +7,14 @@ if (NOT UNIX OR APPLE)
     message(FATAL_ERROR "Only support Linux")
 endif()
 
+add_definitions(-DBOOST_LOG_DYN_LINK)
+
 # Libraries
     # From conan
     include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
     conan_basic_setup()
         # Boost
-        FIND_PACKAGE( Boost 1.80 REQUIRED )
+        FIND_PACKAGE(Boost 1.80 REQUIRED COMPONENTS log_setup log)
         include_directories(${Boost_INCLUDE_DIR})
 
     # From ./external
@@ -21,8 +23,9 @@ endif()
         set(CPPTERMINAL_BUILD_EXAMPLES OFF CACHE BOOL "Disable examples" FORCE)
         set(CPPTERMINAL_ENABLE_INSTALL OFF CACHE BOOL "Disable install" FORCE)
         add_subdirectory(external/cpp-terminal)
+
 # All libraries
-list(APPEND LIBS cpp-terminal antlr4-runtime fmt)
+list(APPEND LIBS cpp-terminal antlr4-runtime fmt Boost::log_setup Boost::log)
 
 # Generate grammar CPP files
 execute_process(COMMAND ${PROJECT_SOURCE_DIR}/utils/generate_grammar.sh)

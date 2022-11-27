@@ -7,3 +7,6 @@ build
 # auto generated files
 src/grammar/*
 !src/grammar/SQL.g4
+
+# scratch file
+const_lut.h
