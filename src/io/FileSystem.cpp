@@ -21,13 +21,18 @@ void FileSystem::ReadPage(FileID fd, PageID page_id, uint8_t *dst) {
                 read_size
         };
     }
-    TraceLog << "Read Page @" << fd << " #" << page_id;
+    TraceLog << "FileSystem Read Page @" << fd << " #" << page_id;
 }
 
 void FileSystem::WritePage(FileID fd, PageID page_id, uint8_t *src) {
     lseek(fd, PAGE_SIZE * page_id, SEEK_SET);
     ssize_t write_size = write(fd, src, PAGE_SIZE);
     if (write_size != PAGE_SIZE) {
+        if (write_size < 0) {
+            const char *errmsg{strerror(errno)};
+            throw FileSystemError{"Write Page @{} #{} with returns value {}; Error #{}: {}",
+                                  fd, page_id, write_size, errno, errmsg};
+        }
         throw FileSystemError{
                 "Expecting {} bytes for page write, got {} instead.",
                 PAGE_SIZE,
@@ -43,10 +48,11 @@ FileID FileSystem::OpenFile(const std::string &path) {
     }
     FileID fd{open(path.c_str(), O_RDWR)};
     if (fd < 0) {
-        const char *errmsg {strerror(errno)};
+        const char *errmsg{strerror(errno)};
         throw FileSystemError{"Open file {} with non-zero returns value {}; Error #{}: {}",
                               path, fd, errno, errmsg};
     }
+    TraceLog << "Open file " << path << " with FileID " << fd;
 
     return fd;
 }
@@ -54,11 +60,11 @@ FileID FileSystem::OpenFile(const std::string &path) {
 void FileSystem::CloseFile(FileID fd) {
     int close_status{close(fd)};
     if (close_status != 0) {
-        const char *errmsg {strerror(errno)};
+        const char *errmsg{strerror(errno)};
         throw FileSystemError{"Close FD {} with non-zero return value {}; Error #{}: {}",
                               fd, close_status, errno, errmsg};
     }
-    TraceLog << "Close file" << fd;
+    TraceLog << "Close file @" << fd;
 }
 
 void FileSystem::MakeDirectory(const std::string &path, bool exist_ok) {
@@ -97,13 +103,13 @@ FileID FileSystem::NewFile(const std::string &path) {
     if (std::filesystem::exists(path)) {
         throw FileSystemError{"Fail to create file {}; File exists", path};
     }
-    FileID fd = open(path.c_str(), O_CREAT, S_IRUSR | S_IWUSR);
+    FileID fd = open(path.c_str(), O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
     if (fd < 0) {
-        const char *errmsg {strerror(errno)};
+        const char *errmsg{strerror(errno)};
         throw FileSystemError{"Create file {} with non-zero returns value {}; Error #{}: {}",
                               path, fd, errno, errmsg};
     }
-    TraceLog << "Create file " << path << " with FileID " << fd;
+    TraceLog << "Create file " << path << " with FileID @" << fd;
     return fd;
 }
 

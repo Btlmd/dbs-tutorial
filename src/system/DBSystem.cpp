@@ -5,6 +5,8 @@
 #include "DBSystem.h"
 
 #include <filesystem>
+#include <optional>
+
 
 #include <defines.h>
 #include <io/FileSystem.h>
@@ -48,7 +50,7 @@ void DBSystem::Init() {
 }
 
 Result *DBSystem::UseDatabase(const std::string &db_name) {
-    if (databases.find(db_name) != databases.end()) {
+    if (databases.find(db_name) == databases.end()) {
         throw OperationError{"Unknown database '{}'", db_name};
     }
     if (on_use) {
@@ -59,7 +61,7 @@ Result *DBSystem::UseDatabase(const std::string &db_name) {
      * Table File Structure
      * {table_count}
      * {next_table_id}
-     * {table_id, table_table_name}
+     * {table_id, table_name}
      * ...
      */
 
@@ -67,7 +69,6 @@ Result *DBSystem::UseDatabase(const std::string &db_name) {
     table_info_fd = FileSystem::OpenFile(DB_DIR / db_name / TABLE_FILE);
     const uint8_t *table_info_ptr{buffer.ReadPage(table_info_fd, 0)->data};
     read_var(table_info_ptr, table_count);
-    read_var(table_info_ptr, next_table_id);  // NOTE: Assume that next_page_id not overflow
 
     std::string table_name;
     TableID table_id;
@@ -127,7 +128,7 @@ void DBSystem::CloseDatabase() {
     on_use = false;
 }
 
-Result *DBSystem::ShowDatabases() {
+Result *DBSystem::ShowDatabases() const {
     std::vector<std::vector<std::string>> db_name_buffer;
     for (const auto &db_name: databases) {
         db_name_buffer.emplace_back(std::vector<std::string>{{db_name}});
@@ -145,10 +146,18 @@ DBSystem::~DBSystem() {
     }
 }
 
-Result *DBSystem::CreateTable(const std::string &table_name, const std::vector<FieldMeta *> &fields) {
+Result *DBSystem::CreateTable(const std::string &table_name, const std::vector<FieldMeta *> &field_meta,
+                              std::optional<RawPrimaryKey> raw_pk, const std::vector<RawForeignKey> &raw_fks) {
     if (!on_use) {
         throw OperationError{"No database selected"};
     }
+
+    if (CheckTableExist(table_name)) {
+        throw OperationError{"Table `{}` already exists", table_name};
+    }
+
+    // assign file descriptor
+
     TableID table_id{NextTableID()};
     table_data_fd[table_id] = FileSystem::NewFile(
             DB_DIR / current_database / fmt::format(TABLE_DATA_PATTERN, table_id));
@@ -156,7 +165,23 @@ Result *DBSystem::CreateTable(const std::string &table_name, const std::vector<F
             DB_DIR / current_database / fmt::format(TABLE_META_PATTERN, table_id));
     table_index_fd[table_id] = FileSystem::NewFile(
             DB_DIR / current_database / fmt::format(TABLE_INDEX_PATTERN, table_id));
-    meta_map[table_id] = TableMeta:(fields, buffer);
+    table_name_map.insert({table_name, table_id});
+
+    /**
+     * on creation, field IDs are continuous. however, after deleting fields, this is not guaranteed
+     */
+    meta_map[table_id] = new TableMeta{0, {field_meta}, table_meta_fd[table_id], buffer};
+
+    // primary key and foreign keys
+
+    if (raw_pk) {
+        AddPrimaryKey(table_id, raw_pk.value());
+    }
+
+    for (const auto& fk: raw_fks) {
+        AddForeignKey(table_id, fk);
+    }
+
     return new TextResult{"Query OK"};
 }
 
@@ -164,7 +189,7 @@ Result *DBSystem::DropTable(const std::string &table_name) {
 
 }
 
-Result *DBSystem::ShowTables() {
+Result *DBSystem::ShowTables() const {
     std::vector<std::vector<std::string>> table_name_buffer;
     for (const auto &[name, tid]: table_name_map) {
         table_name_buffer.push_back({{name}});
@@ -172,4 +197,98 @@ Result *DBSystem::ShowTables() {
     return new TableResult{{fmt::format("Tables_in_{}", current_database)}, table_name_buffer};
 }
 
+Result *DBSystem::AddForeignKey(const std::string &table_name, const RawForeignKey &raw_fk) {
+    auto table_id{GetTableID(table_name)};
+    AddForeignKey(table_id, raw_fk);
+    return new TextResult{"Query OK"};
+}
 
+Result *DBSystem::AddPrimaryKey(const std::string &table_name, const RawPrimaryKey &raw_pk) {
+    auto table_id{GetTableID(table_name)};
+    AddPrimaryKey(table_id, raw_pk);
+    return new TextResult{"Query OK"};
+}
+
+void DBSystem::AddForeignKey(TableID table, const RawForeignKey &raw_fk) {
+    auto &[fk_name, reference_table_name, fk_field_names, reference_field_names]{raw_fk};
+    auto meta{meta_map[table]};
+
+    auto fk{new ForeignKey};
+    if (fk_name.size() > CONSTRAINT_NAME_LEN_MAX) {
+        throw OperationError{"Identifier name '{}' is too long", fk_name};
+    }
+
+    if (fk_field_names.size() != reference_field_names.size()) {
+        throw OperationError{"Mismatch of reference table field count"};
+    }
+
+    auto reference_table_id{GetTableID(reference_table_name)};
+    auto reference_meta{meta_map[reference_table_id]};
+    fk_name.copy(fk->name, fk_name.size(), 0);
+    for (int i{0}; i < fk_field_names.size(); ++i) {
+        auto table_fid{meta->field_meta.ToID(
+                fk_field_names[i],
+                OperationError{"Key column `{}` does not exist in table", fk_field_names[i]}
+        )};
+        auto reference_fid{reference_meta->field_meta.ToID(
+                reference_field_names[i],
+                OperationError{
+                        "Missing column `{}` for constraint `{}` in the referenced table `{}`",
+                        fk_field_names[i],
+                        fk_name,
+                        reference_table_name
+                }
+        )};
+        fk->fields[i] = table_fid;
+        fk->reference_fields[i] = reference_fid;
+    }
+    fk->field_count = fk_field_names.size();
+
+    /**
+     * TODO: check duplications of fields?
+     */
+
+    meta->foreign_keys.push_back(fk);
+}
+
+void DBSystem::AddPrimaryKey(TableID table_id, const RawPrimaryKey &raw_pk) {
+    const auto &[pk_name, pk_fields]{raw_pk};
+    auto meta{meta_map[table_id]};
+
+    if (meta->primary_key) {
+        throw OperationError{"Multiple primary key defined"};
+    }
+
+    auto pk{new PrimaryKey};
+    if (pk_name.size() > CONSTRAINT_NAME_LEN_MAX) {
+        throw OperationError{"Identifier name '{}' is too long", pk_name};
+    }
+    pk_name.copy(pk->name, pk_name.size(), 0);
+
+    pk->field_count = 0;
+    for (const auto &pk_field_name: pk_fields) {
+        pk->fields[pk->field_count] = meta->field_meta.ToID(
+                pk_field_name,
+                OperationError{"Key column `{}` does not exist in the table", pk_field_name}
+        );
+        ++(pk->field_count);
+    }
+
+    /**
+     * TODO: unique constraint, not null constraint, index build up
+     */
+
+    meta->primary_key = pk;
+}
+
+bool DBSystem::CheckTableExist(const std::string &table_name) const noexcept {
+    return table_name_map.left.find(table_name) != table_name_map.left.end();
+}
+
+TableID DBSystem::GetTableID(const std::string &table_name) const {
+    auto iter {table_name_map.left.find(table_name)};
+    if (iter == table_name_map.left.end()) {
+        throw OperationError{"Table `{}` does not exist" ,table_name};
+    }
+    return iter->second;
+}

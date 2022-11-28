@@ -21,18 +21,19 @@ enum class FieldType {
 };
 
 class PrimaryKey {
+public:
     char name[CONSTRAINT_NAME_LEN_MAX + 1];
     FieldID field_count;
-    FieldID fields[MAX_FK_COUNT];
+    FieldID fields[MAX_FIELD_COUNT];
 };
 
 class ForeignKey {
 public:
     char name[CONSTRAINT_NAME_LEN_MAX + 1];
     FieldID field_count;
-    FieldID fields[MAX_FK_COUNT];
+    FieldID fields[MAX_FIELD_COUNT];
     TableID reference_table;
-    FieldID reference_fields[MAX_FK_COUNT];
+    FieldID reference_fields[MAX_FIELD_COUNT];
 };
 
 class Field {
@@ -233,6 +234,7 @@ class FieldMeta {
 public:
     FieldType type;
     std::string name;
+    FieldID field_id;
 
     RecordSize max_size{-1};
     bool unique{false};

@@ -5,11 +5,17 @@
 #ifndef DBS_TUTORIAL_DEFINES_H
 #define DBS_TUTORIAL_DEFINES_H
 
-#include <cstdint>
-#include <string>
 #include <fcntl.h>
+
+#include <cstdint>
+
+#include <string>
+#include <vector>
+#include <tuple>
 #include <filesystem>
 #include <limits>
+#include <support/Any.h>
+
 
 
 // Types
@@ -20,6 +26,15 @@ typedef int32_t DbID;
 typedef int32_t TableID;
 typedef int16_t FieldID;
 typedef int16_t RecordSize;
+
+// The results of a `program`
+typedef std::vector<antlrcpp::Any> ResultList;
+
+// ForeignKey from std::string (to be further transformed into IDs)
+typedef std::tuple<std::string, std::string, std::vector<std::string>, std::vector<std::string>> RawForeignKey;
+
+// PrimaryKey from std::string (to be further transformed into IDs)
+typedef std::tuple<std::string, std::vector<std::string>> RawPrimaryKey;
 
 // System Constants
 
@@ -46,8 +61,6 @@ constexpr char TABLE_META_PATTERN[]{"{}_meta.bin"};
 constexpr char TABLE_DATA_PATTERN[]{"{}_data.bin"};
 constexpr char TABLE_INDEX_PATTERN[]{"{}_index.bin"};
 
-#define DEBUG 1
-
 // Logging Settings
 
 #include <boost/log/trivial.hpp>
@@ -57,6 +70,7 @@ constexpr char LOGGING_PATTERN[]{"{:%Y_%m_%d_%H:%M:%S}.log"};
 #define DebugLog BOOST_LOG_TRIVIAL(debug)
 #define InfoLog BOOST_LOG_TRIVIAL(info)
 #define WarningLog BOOST_LOG_TRIVIAL(warning)
+#define ErrorLog BOOST_LOG_TRIVIAL(error)
 
 
 #endif //DBS_TUTORIAL_DEFINES_H

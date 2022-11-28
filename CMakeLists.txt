@@ -7,7 +7,10 @@ if (NOT UNIX OR APPLE)
     message(FATAL_ERROR "Only support Linux")
 endif()
 
-add_definitions(-DBOOST_LOG_DYN_LINK)
+add_compile_definitions(BOOST_LOG_DYN_LINK)
+
+add_compile_definitions(DEBUG)
+add_compile_definitions(_GLIBCXX_DEBUG)
 
 # Libraries
     # From conan
@@ -36,13 +39,13 @@ add_executable(main src/main.cpp ${dbms_source})
 target_link_libraries(main ${LIBS})
 target_include_directories(main PUBLIC src)
 
-enable_testing()
-find_package(GTest)
-function(GTEST TEST_NAME)
-    add_executable(${TEST_NAME} tests/${TEST_NAME}.cpp)
-    target_link_libraries(${TEST_NAME} ${LIBS} GTest::gtest_main)
-    gtest_discover_tests(${TEST_NAME})
-endfunction()
-
-# test cases
-GTEST(basic)
+#enable_testing()
+#find_package(GTest)
+#function(GTEST TEST_NAME)
+#    add_executable(${TEST_NAME} tests/${TEST_NAME}.cpp)
+#    target_link_libraries(${TEST_NAME} ${LIBS} GTest::gtest_main)
+#    gtest_discover_tests(${TEST_NAME})
+#endfunction()
+#
+## test cases
+#GTEST(basic)

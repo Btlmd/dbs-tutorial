@@ -7,7 +7,7 @@
 #include <cassert>
 
 Page *BufferSystem::ReadPage(FileID fd, PageID page_id) {
-    TraceLog << "Read page @" << fd << " #" << page_id;
+    TraceLog << "BufferSystem Read page @" << fd << " #" << page_id;
     Page *pos;
     auto lookup {buffer_map_.find({fd, page_id})};
     if (lookup == buffer_map_.end()) {
@@ -31,6 +31,7 @@ BufferSystem::BufferSystem() {
 
 void BufferSystem::WriteBack(Page *page) {
     if (page->dirty) {
+        TraceLog << "Write Back #" << page->id;
         FileSystem::WritePage(page->fd, page->id, page->data);
     }
     page->dirty = false;
@@ -49,6 +50,7 @@ void BufferSystem::Access(Page *page) {
 }
 
 void BufferSystem::ReleaseFile(FileID fd) {
+    TraceLog << "Release File @" << fd;
     for (auto [ptr, end]{buffer_map_fd_.equal_range(fd)}; ptr != end; ++ptr) {
         WriteBack(ptr->second);
         assert(buffer_map_.find({fd, ptr->second->id}) != buffer_map_.end());
@@ -80,6 +82,7 @@ Page *BufferSystem::AllocPage(FileID fd, PageID page_id) {
         pos = free_record_.front();
         free_record_.pop_front();
     }
+    pos->fd = fd;
     buffer_map_.insert({{fd, page_id}, pos});
     buffer_map_fd_.insert({fd, pos});
     return pos;

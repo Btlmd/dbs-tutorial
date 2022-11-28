@@ -22,6 +22,7 @@ antlrcpp::Any DBVisitor::visitProgram(SQLParser::ProgramContext *ctx) {
     auto results{new ResultList};
     for (auto &child: ctx->children) {
         if (dynamic_cast<SQLParser::StatementContext *>(child)) {
+            DebugLog << "Process query: " << child->getText();
             auto begin{std::chrono::high_resolution_clock::now()};
             antlrcpp::Any result{child->accept(this)};
             std::chrono::duration<double> elapse{std::chrono::high_resolution_clock::now() - begin};
@@ -51,10 +52,11 @@ antlrcpp::Any DBVisitor::visitCreate_table(SQLParser::Create_tableContext *ctx) 
     std::string table_name{ctx->Identifier()->getText()};
     auto field_ctx_list{ctx->field_list()->field()};
 
-    RawPrimaryKey *raw_pk;
-    std::vector<RawForeignKey *> raw_fks;
+    std::optional<RawPrimaryKey> raw_pk;
+    std::vector<RawForeignKey> raw_fks;
     std::vector<FieldMeta *> field_meta;
 
+    FieldID field_id_counter{0};
 
     for (const auto &field_ctx: field_ctx_list) {
         auto nf{dynamic_cast<SQLParser::Normal_fieldContext *>(field_ctx)};
@@ -93,28 +95,33 @@ antlrcpp::Any DBVisitor::visitCreate_table(SQLParser::Create_tableContext *ctx) 
             if (field_type == FieldType::VARCHAR) {
                 auto max_len_raw = std::stoi(nf->type_()->Integer()->getText());
                 if (max_len_raw > RECORD_LEN_MAX) {
-                    throw OperationError{"Column length too big for column `{} (max = {})`", field_name, RECORD_LEN_MAX};
+                    throw OperationError{"Column length too big for column `{} (max = {})`", field_name,
+                                         RECORD_LEN_MAX};
                 }
-                max_len = max_len_raw;
+                max_size = max_len_raw;
             }
 
 
             field_meta.push_back(new FieldMeta{
                     .type{field_type},
                     .name{field_name},
+                    .field_id{field_id_counter++},
 
                     .max_size{max_size},
                     .unique{false},
                     .not_null{not_null == nullptr},
-                    .has_default{defualt_value == nullptr},
-                    .default_value{default_value};
+                    .has_default{default_value == nullptr},
+                    .default_value{default_value},
             });
             continue;
         }
 
         auto fk{dynamic_cast<SQLParser::Foreign_key_fieldContext *>(field_ctx)};
         if (fk) {
-            std::string fk_name{fk->Identifier(0)->getText()};
+            std::string fk_name;
+            if (fk->Identifier(0)) {
+                fk_name = fk->Identifier(0)->getText();
+            }
             std::string reference_table_name{fk->Identifier(1)->getText()};
             std::vector<std::string> field_names;
             std::vector<std::string> reference_field_names;
@@ -124,28 +131,32 @@ antlrcpp::Any DBVisitor::visitCreate_table(SQLParser::Create_tableContext *ctx) 
             for (const auto &ident: fk->identifiers(1)->Identifier()) {
                 reference_field_names.emplace_back(ident->getText());
             }
-            raw_fks.push_back(new RawForeignKey{fk_name, reference_table_name, field_names, reference_field_names});
+            raw_fks.emplace_back(fk_name, reference_table_name, field_names, reference_field_names);
             continue;
         }
 
         auto pk{dynamic_cast<SQLParser::Primary_key_fieldContext *>(field_ctx)};
         if (pk) {
             if (raw_pk) {
-                throw OperationError{"Define more than one primary key is not supported"};
+                throw OperationError{"Multiple primary key defined"};
             }
-            std::string pk_name{pk->Identifier()->getText()};
+            std::string pk_name;
+            if (pk->Identifier()) {
+                pk_name = pk->Identifier()->getText();
+            }
             std::vector<std::string> field_names;
             for (const auto &ident: pk->identifiers()->Identifier()) {
                 field_names.emplace_back(ident->getText());
             }
-            raw_pk = new RawPrimaryKey{pk_name, field_names};
+            raw_pk = RawPrimaryKey{pk_name, field_names};
             continue;
         }
+
         std::cout << field_ctx->getText() << std::endl;
     }
 
 
-    exit(-1);
+    return system.CreateTable(table_name, field_meta, raw_pk, raw_fks);
 }
 
 antlrcpp::Any DBVisitor::visitDrop_table(SQLParser::Drop_tableContext *ctx) {
@@ -183,5 +194,9 @@ antlrcpp::Any DBVisitor::visitForeign_key_field(SQLParser::Foreign_key_fieldCont
 antlrcpp::Any DBVisitor::visitPrimary_key_field(SQLParser::Primary_key_fieldContext *ctx) {
     std::cout << "primary_key fc" << ctx->getText() << std::endl;
     return SQLBaseVisitor::visitPrimary_key_field(ctx);
+}
+
+antlrcpp::Any DBVisitor::visitUse_db(SQLParser::Use_dbContext *ctx) {
+    return system.UseDatabase(ctx->Identifier()->getText());
 }
 

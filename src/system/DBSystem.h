@@ -24,27 +24,29 @@ public:
 
     ~DBSystem();
 
-
     Result *CreateDatabase(const std::string &db_name);
 
     Result *UseDatabase(const std::string &db_name);
 
     Result *DropDatabase(const std::string &db_name);
 
-    Result *ShowDatabases();
+    Result *ShowDatabases() const;
 
 
-    Result *CreateTable(const std::string &table_name, const std::vector<FieldMeta *> &field_names, );
+    Result *CreateTable(const std::string &table_name, const std::vector<FieldMeta *> &field_meta,
+                        std::optional<RawPrimaryKey> raw_pk, const std::vector<RawForeignKey> &raw_fks);
 
     Result *DropTable(const std::string &table_name);
 
-    Result *ShowTables();
+    Result *ShowTables() const;
 
+    Result *AddForeignKey(const std::string &table_name, const RawForeignKey &raw_fk);
 
-    void CloseDatabase();
+    Result *AddPrimaryKey(const std::string &table_name, const RawPrimaryKey &raw_pk);
 
-    void Init();
+    Result *DropForeignKey(const std::string &table_name, const std::string fk_name);
 
+    Result *DropPrimaryKey(const std::string &table_name, const std::string fk_name);
 
 private:
     std::set<std::string> databases;
@@ -61,13 +63,47 @@ private:
 
     BufferSystem buffer;
 
-    TableID NextTableID() {
+    TableID NextTableID() const {
         TableID tid{0};
         while (table_name_map.right.find(tid) != table_name_map.right.end()) {
             ++tid;
         }
         return tid;
     }
+
+    /**
+     * Add foreign key to `table_id`
+     * @param table_id
+     * @param raw_fk
+     */
+    void AddForeignKey(TableID table_id, const RawForeignKey &raw_fk);
+
+    /**
+     * Add primary key to `table_id`
+     * the raw_fk can be illegal, where an exception is thrown
+     * @param table_id
+     * @param raw_pk
+     */
+    void AddPrimaryKey(TableID table_id, const RawPrimaryKey &raw_pk);
+
+    /**
+     *
+     * @param table_name
+     * @return
+     */
+    bool CheckTableExist(const std::string &table_name) const noexcept;
+
+    /**
+     * If table exists, return table_id
+     * Otherwise throw exception
+     * @param table_name
+     * @return
+     */
+    TableID GetTableID(const std::string &table_name) const;
+
+    void CloseDatabase();
+
+    void Init();
 };
 
 #endif //DBS_TUTORIAL_DBSYSTEM_H

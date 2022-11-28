@@ -12,7 +12,9 @@ class FileSystemError : public std::runtime_error {
 public:
     template<typename... T>
     explicit FileSystemError(fmt::format_string<T...> fmt, T &&... args) :
-            std::runtime_error{"FileSystemError: " + fmt::format(fmt, args...)} {}
+            std::runtime_error{"FileSystemError: " + fmt::format(fmt, args...)} {
+        ErrorLog << std::runtime_error::what();
+    }
 };
 
 
