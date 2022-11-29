@@ -10,6 +10,9 @@
 
 #include <boost/bimap.hpp>
 
+#include <stdexcept>
+#include <fmt/core.h>
+
 #include <defines.h>
 #include <record/Field.h>
 #include <io/BufferSystem.h>
@@ -20,7 +23,7 @@ public:
     std::unordered_map<std::string, FieldID> name_id;
     std::unordered_map<FieldID, FieldMeta *> id_meta;
 
-    FieldMeteTable(const std::vector<FieldMeta *> & field_meta) {
+    FieldMeteTable(const std::vector<FieldMeta *> &field_meta) {
         for (auto fm: field_meta) {
             name_id.insert({fm->name, fm->field_id});
             id_meta.insert({fm->field_id, fm});
@@ -42,10 +45,11 @@ public:
         return iter->second;
     }
 
-    FieldID ToID(const std::string &field_name, const std::exception& e) const {
+    template<typename E, typename... T>
+    FieldID ToID(const std::string &field_name, fmt::format_string<T...> fmt, T &&... args) const {
         auto fid{ToID(field_name)};
         if (fid == -1) {
-            throw e;
+            throw E(fmt, args ...);
         }
         return fid;
     }

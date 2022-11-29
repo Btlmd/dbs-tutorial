@@ -12,7 +12,7 @@ Page *BufferSystem::ReadPage(FileID fd, PageID page_id) {
     auto lookup {buffer_map_.find({fd, page_id})};
     if (lookup == buffer_map_.end()) {
         // buffer miss
-        AllocPage(fd, page_id);
+        pos = AllocPage(fd, page_id);
         FileSystem::ReadPage(fd, page_id, pos->data);
     } else {
         // buffer hit
@@ -26,6 +26,8 @@ BufferSystem::BufferSystem() {
     buffer_ = new Page[BUFFER_SIZE];
     for (int i{0}; i < BUFFER_SIZE; ++i) {
         free_record_.push_back(&buffer_[i]);
+        visit_record_.push_back(&buffer_[i]);
+        visit_record_map_.insert({&buffer_[i], std::prev(visit_record_.end())});
     }
 }
 
@@ -72,7 +74,7 @@ Page *BufferSystem::CreatePage(FileID fd, PageID page_id) {
 Page *BufferSystem::AllocPage(FileID fd, PageID page_id) {
     assert(buffer_map_.find({fd, page_id}) == buffer_map_.end());
     Page *pos;
-    if (visit_record_.size() == BUFFER_SIZE) {
+    if (buffer_map_.size() == BUFFER_SIZE) {
         assert(free_record_.empty());
         // buffer full
         pos = visit_record_.back();

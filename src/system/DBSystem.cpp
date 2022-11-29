@@ -56,6 +56,7 @@ Result *DBSystem::UseDatabase(const std::string &db_name) {
     if (on_use) {
         CloseDatabase();
     }
+    TraceLog << "Opening dataset " << db_name;
     on_use = true;
     /**
      * Table File Structure
@@ -81,6 +82,8 @@ Result *DBSystem::UseDatabase(const std::string &db_name) {
         table_index_fd[table_id] = FileSystem::OpenFile(DB_DIR / db_name / fmt::format(TABLE_INDEX_PATTERN, table_id));
         meta_map[table_id] = TableMeta::FromSrc(table_meta_fd[table_id], buffer);
     }
+
+    current_database = db_name;
     return new TextResult{"Database changed"};
 }
 
@@ -101,27 +104,30 @@ Result *DBSystem::DropDatabase(const std::string &db_name) {
 
 void DBSystem::CloseDatabase() {
     assert(table_info_fd > 0);
-    assert(current_database.length() > 0);
+    assert(!current_database.empty());
     assert(on_use);
+
+    TraceLog << "Closing database " << current_database;
 
     if (table_info_fd > 0) {
         buffer.CloseFile(table_info_fd);
         table_info_fd = -1;
     }
 
-    if (table_count != 0) {
-        for (int table_id{0}; table_id < table_count; table_id) {
-            buffer.CloseFile(table_meta_fd[table_id]);
-            buffer.CloseFile(table_data_fd[table_id]);
-            buffer.CloseFile(table_index_fd[table_id]);
-        }
+    // close file descriptors
 
-        // reset table status
-        table_name_map.clear();
-        table_data_fd.clear();
-        table_meta_fd.clear();
-        table_index_fd.clear();
-    }
+    auto close_func = [this](const std::pair<TableID, FileID>& relation)-> void {
+        buffer.CloseFile(relation.second);
+    };
+    std::for_each(table_meta_fd.begin(), table_meta_fd.end(), close_func);
+    std::for_each(table_data_fd.begin(), table_data_fd.end(), close_func);
+    std::for_each(table_index_fd.begin(), table_index_fd.begin(), close_func);
+
+    // reset table status
+    table_name_map.clear();
+    table_data_fd.clear();
+    table_meta_fd.clear();
+    table_index_fd.clear();
 
     current_database = "";
     table_info_fd = -1;
@@ -159,13 +165,6 @@ Result *DBSystem::CreateTable(const std::string &table_name, const std::vector<F
     // assign file descriptor
 
     TableID table_id{NextTableID()};
-    table_data_fd[table_id] = FileSystem::NewFile(
-            DB_DIR / current_database / fmt::format(TABLE_DATA_PATTERN, table_id));
-    table_meta_fd[table_id] = FileSystem::NewFile(
-            DB_DIR / current_database / fmt::format(TABLE_META_PATTERN, table_id));
-    table_index_fd[table_id] = FileSystem::NewFile(
-            DB_DIR / current_database / fmt::format(TABLE_INDEX_PATTERN, table_id));
-    table_name_map.insert({table_name, table_id});
 
     /**
      * on creation, field IDs are continuous. however, after deleting fields, this is not guaranteed
@@ -178,9 +177,19 @@ Result *DBSystem::CreateTable(const std::string &table_name, const std::vector<F
         AddPrimaryKey(table_id, raw_pk.value());
     }
 
-    for (const auto& fk: raw_fks) {
+    for (const auto &fk: raw_fks) {
         AddForeignKey(table_id, fk);
     }
+
+    // if all previous step succeed, create table in DBSystem
+
+    table_data_fd[table_id] = FileSystem::NewFile(
+            DB_DIR / current_database / fmt::format(TABLE_DATA_PATTERN, table_id));
+    table_meta_fd[table_id] = FileSystem::NewFile(
+            DB_DIR / current_database / fmt::format(TABLE_META_PATTERN, table_id));
+    table_index_fd[table_id] = FileSystem::NewFile(
+            DB_DIR / current_database / fmt::format(TABLE_INDEX_PATTERN, table_id));
+    table_name_map.insert({table_name, table_id});
 
     return new TextResult{"Query OK"};
 }
@@ -226,18 +235,16 @@ void DBSystem::AddForeignKey(TableID table, const RawForeignKey &raw_fk) {
     auto reference_meta{meta_map[reference_table_id]};
     fk_name.copy(fk->name, fk_name.size(), 0);
     for (int i{0}; i < fk_field_names.size(); ++i) {
-        auto table_fid{meta->field_meta.ToID(
+        auto table_fid{meta->field_meta.ToID<OperationError>(
                 fk_field_names[i],
-                OperationError{"Key column `{}` does not exist in table", fk_field_names[i]}
+                "Key column `{}` does not exist in table", fk_field_names[i]
         )};
-        auto reference_fid{reference_meta->field_meta.ToID(
+        auto reference_fid{reference_meta->field_meta.ToID<OperationError>(
                 reference_field_names[i],
-                OperationError{
-                        "Missing column `{}` for constraint `{}` in the referenced table `{}`",
-                        fk_field_names[i],
-                        fk_name,
-                        reference_table_name
-                }
+                "Missing column `{}` for constraint `{}` in the referenced table `{}`",
+                reference_field_names[i],
+                fk_name,
+                reference_table_name
         )};
         fk->fields[i] = table_fid;
         fk->reference_fields[i] = reference_fid;
@@ -267,9 +274,9 @@ void DBSystem::AddPrimaryKey(TableID table_id, const RawPrimaryKey &raw_pk) {
 
     pk->field_count = 0;
     for (const auto &pk_field_name: pk_fields) {
-        pk->fields[pk->field_count] = meta->field_meta.ToID(
+        pk->fields[pk->field_count] = meta->field_meta.ToID<OperationError>(
                 pk_field_name,
-                OperationError{"Key column `{}` does not exist in the table", pk_field_name}
+                "Key column `{}` does not exist in the table", pk_field_name
         );
         ++(pk->field_count);
     }
@@ -286,9 +293,9 @@ bool DBSystem::CheckTableExist(const std::string &table_name) const noexcept {
 }
 
 TableID DBSystem::GetTableID(const std::string &table_name) const {
-    auto iter {table_name_map.left.find(table_name)};
+    auto iter{table_name_map.left.find(table_name)};
     if (iter == table_name_map.left.end()) {
-        throw OperationError{"Table `{}` does not exist" ,table_name};
+        throw OperationError{"Table `{}` does not exist", table_name};
     }
     return iter->second;
 }

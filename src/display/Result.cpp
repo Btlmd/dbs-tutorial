@@ -37,7 +37,7 @@ TableResult::Row TableResult::MoveToRow(std::vector<std::string> &&los) {
 
 std::string TableResult::ToString() {
     std::string output;
-    if(records.empty()) {
+    if (records.empty()) {
         output = "Empty Set";
     } else {
         if (table) {
@@ -52,12 +52,18 @@ std::string TableResult::ToString() {
         }
 
         // table format
-        table->format().border("");
-        table->format().corner("");
+        auto record_len{records.size()};
+        if (record_len > 1) {  // range [1, record_len]
+            table->row(1).format().border_bottom("").corner_bottom_left("").corner_bottom_right("");
+            for (int i{2}; i < record_len; ++i) {
+                table->row(i).format().border_top("").border_bottom("").corner("");
+            }
+            table->row(record_len).format().border_top("").corner_top_left("").corner_top_right("");
+        }
 
         output = table->str() + "\n" + fmt::format("{} rows in set", records.size());
     }
-    return output + fmt::format(" ({:.2f} sec)" ,runtime);
+    return output + fmt::format(" ({:.2f} sec)", runtime);
 }
 
 void Result::SetRuntime(double _runtime) {

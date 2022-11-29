@@ -10,7 +10,16 @@ endif()
 add_compile_definitions(BOOST_LOG_DYN_LINK)
 
 add_compile_definitions(DEBUG)
-add_compile_definitions(_GLIBCXX_DEBUG)
+
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+    message("Building a release version")
+endif()
+
+#set(CMAKE_CXX_FLAGS "-Wall -Wextra")
+#set(CMAKE_CXX_FLAGS_DEBUG "-g")
+#set(CMAKE_CXX_FLAGS_DEBUG "-O0")
+#set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 # Libraries
     # From conan

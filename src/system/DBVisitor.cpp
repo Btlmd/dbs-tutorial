@@ -167,35 +167,6 @@ antlrcpp::Any DBVisitor::visitField_list(SQLParser::Field_listContext *ctx) {
     return SQLBaseVisitor::visitField_list(ctx);
 }
 
-antlrcpp::Any DBVisitor::visitNormal_field(SQLParser::Normal_fieldContext *ctx) {
-    std::cout << "normal fc" << ctx->getText() << std::endl;
-    return SQLBaseVisitor::visitNormal_field(ctx);
-}
-
-antlrcpp::Any DBVisitor::visitForeign_key_field(SQLParser::Foreign_key_fieldContext *ctx) {
-    visitChildren(ctx);
-    std::string fk_name{ctx->Identifier(0)->getText()};
-    std::string reference_table_name{ctx->Identifier(1)->getText()};
-    std::vector<std::string> field_names;
-    std::vector<std::string> reference_field_names;
-    for (const auto &ident: ctx->identifiers(0)->Identifier()) {
-        field_names.emplace_back(ident->getText());
-    }
-    for (const auto &ident: ctx->identifiers(1)->Identifier()) {
-        reference_field_names.emplace_back(ident->getText());
-    }
-    std::cout << "fk_name " << fk_name << std::endl;
-    std::cout << "fk_ref " << reference_table_name << std::endl;
-    std::cout << "foreign_keys fc " << field_names[0] << std::endl;
-    std::cout << "foreign_keys fc " << reference_field_names[0] << std::endl;
-    return ctx;
-}
-
-antlrcpp::Any DBVisitor::visitPrimary_key_field(SQLParser::Primary_key_fieldContext *ctx) {
-    std::cout << "primary_key fc" << ctx->getText() << std::endl;
-    return SQLBaseVisitor::visitPrimary_key_field(ctx);
-}
-
 antlrcpp::Any DBVisitor::visitUse_db(SQLParser::Use_dbContext *ctx) {
     return system.UseDatabase(ctx->Identifier()->getText());
 }

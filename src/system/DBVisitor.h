@@ -32,12 +32,6 @@ public:
 
     antlrcpp::Any visitField_list(SQLParser::Field_listContext *ctx) override;
 
-    antlrcpp::Any visitNormal_field(SQLParser::Normal_fieldContext *ctx) override;
-
-    antlrcpp::Any visitPrimary_key_field(SQLParser::Primary_key_fieldContext *ctx) override;
-
-    antlrcpp::Any visitForeign_key_field(SQLParser::Foreign_key_fieldContext *ctx) override;
-
 };
 
 
