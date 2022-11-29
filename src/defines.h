@@ -17,7 +17,6 @@
 #include <support/Any.h>
 
 
-
 // Types
 
 typedef decltype(open(std::declval<const char *>(), std::declval<int>())) FileID;
@@ -26,6 +25,11 @@ typedef int32_t DbID;
 typedef int32_t TableID;
 typedef int16_t FieldID;
 typedef int16_t RecordSize;
+typedef int16_t SlotID;
+typedef struct {
+    PageID page;
+    SlotID slot;
+} RecordID;
 
 // The results of a `program`
 typedef std::vector<antlrcpp::Any> ResultList;
@@ -36,10 +40,12 @@ typedef std::tuple<std::string, std::string, std::vector<std::string>, std::vect
 // PrimaryKey from std::string (to be further transformed into IDs)
 typedef std::tuple<std::string, std::vector<std::string>> RawPrimaryKey;
 
+
 // System Constants
 
 constexpr int32_t BUFFER_SIZE{60000};
 constexpr int32_t PAGE_SIZE{4096};
+
 
 // Max Length
 
@@ -53,6 +59,7 @@ constexpr int32_t MAX_FK_COUNT{128};
 constexpr int32_t MAX_TABLE_COUNT{std::numeric_limits<TableID>::max()};
 constexpr int32_t MAX_DB_COUNT{std::numeric_limits<DbID>::max()};
 
+
 // File Structure
 
 const std::filesystem::path DB_DIR{"./databases"};
@@ -60,6 +67,7 @@ constexpr char TABLE_FILE[]{"tables.bin"};
 constexpr char TABLE_META_PATTERN[]{"{}_meta.bin"};
 constexpr char TABLE_DATA_PATTERN[]{"{}_data.bin"};
 constexpr char TABLE_INDEX_PATTERN[]{"{}_index.bin"};
+
 
 // Logging Settings
 

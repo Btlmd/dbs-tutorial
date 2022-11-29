@@ -21,12 +21,14 @@
 class FieldMeteTable {
 public:
     std::unordered_map<std::string, FieldID> name_id;
-    std::unordered_map<FieldID, FieldMeta *> id_meta;
+    std::map<FieldID, FieldMeta *> id_meta;
+    std::vector<FieldID> field_seq;
 
     FieldMeteTable(const std::vector<FieldMeta *> &field_meta) {
         for (auto fm: field_meta) {
             name_id.insert({fm->name, fm->field_id});
             id_meta.insert({fm->field_id, fm});
+            field_seq.push_back(fm->field_id);
         }
     }
 
@@ -81,6 +83,10 @@ public:
             delete fk;
         }
     }
+
+    PageID FindFreeSpace(RecordSize size);
+
+    RecordSize
 
 private:
     TableMeta(BufferSystem buffer) : buffer{buffer} {}

@@ -48,6 +48,12 @@ public:
 
     Result *DropPrimaryKey(const std::string &table_name, const std::string fk_name);
 
+    Result *Insert(std::string &table_name, std::vector<Field *> &fields);
+
+    Result *Delete(std::string &table_name);
+
+    Result *Select(std::string &table_name);
+
 private:
     std::set<std::string> databases;
     std::string current_database;
@@ -70,6 +76,8 @@ private:
         }
         return tid;
     }
+
+    void
 
     /**
      * Add foreign key to `table_id`
@@ -101,8 +109,15 @@ private:
      */
     TableID GetTableID(const std::string &table_name) const;
 
+    /**
+     * Close the currently used database
+     * If do database is currently used, throw exception
+     */
     void CloseDatabase();
 
+    /**
+     * Initialize the system
+     */
     void Init();
 };
 
