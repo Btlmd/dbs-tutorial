@@ -17,15 +17,10 @@ std::string TextResult::ToString() {
     return text;
 }
 
-TableResult::TableResult(const std::vector<std::string> &headers, const RecordList &record_list) :
+TableResult::TableResult(std::vector<std::string> headers, const RecordList &record_list) :
         headers{headers}, table{nullptr} {
-    std::vector<std::string> buffer;
     for (const auto &record: record_list) {
-        buffer.clear();
-        std::transform(record.fields.cbegin(), record.fields.cend(), buffer.end(), [](std::shared_ptr<Field>const &f) {
-            return f->ToString();
-        });
-        records.emplace_back(std::move(buffer));
+        records.emplace_back(record->ToString());
     }
 }
 
@@ -68,4 +63,8 @@ std::string TableResult::ToString() {
 
 void Result::SetRuntime(double _runtime) {
     runtime = _runtime;
+}
+
+void Result::AddInfo(const std::string &info) {
+    infos.push_back(info);
 }

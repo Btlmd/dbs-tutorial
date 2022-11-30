@@ -129,21 +129,14 @@ int main() {
 #else
         if (!Term::stdin_connected()) {
 #endif
-//        std::string batch{
-//            "CREATE DATABASE test_db;"
-//                          "USE test_db;"
-//                          "CREATE TABLE test_table0(\n"
-//                          "     int_f0 INT,\n"
-//                          "     int_f1 INT,\n"
-//                          "     vc_f VARCHAR(20) NOT NULL,\n"
-//                          "     float_f FLOAT,\n"
-//                          "\n"
-//                          "     PRIMARY KEY pk_name (int_f0, int_f1)\n"
-////                          "    FOREIGN KEY fk_name (int_f0, int_f1) REFERENCES tt(int_f2, int_f3)\n"
-//                          ");"};
-//        process_input(batch, visitor);
+        std::string buffer;
         for (std::string batch; std::getline(std::cin, batch);) {
-            process_input(batch, visitor);
+            buffer += batch;
+            if (batch.find(';') == std::string::npos) {
+                continue;
+            }
+            process_input(buffer, visitor);
+            buffer.clear();
         }
 #ifdef DEBUG
         return 0;

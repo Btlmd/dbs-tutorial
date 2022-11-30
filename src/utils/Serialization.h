@@ -8,6 +8,8 @@
 #include <string>
 #include <cstring>
 #include <type_traits>
+#include <limits>
+#include <defines.h>
 
 
 inline void write_var(uint8_t *&dst, const void *src, int len) {
@@ -33,14 +35,15 @@ inline void read_var(uint8_t const *&src, T &dst) {
 }
 
 inline void read_string(uint8_t const *&src, std::string &dst) {
-    std::size_t len;
+    RecordSize len;
     read_var(src, len);
     dst.assign(reinterpret_cast<const char *>(src), len);
     src += len;
 }
 
 inline void write_string(uint8_t *&dst, const std::string& src) {
-    write_var(dst, reinterpret_cast<std::size_t>(src.length()));
+    assert(src.size() < std::numeric_limits<RecordSize>().max());
+    write_var(dst, static_cast<RecordSize>(src.size()));
     src.copy(reinterpret_cast<char *>(dst), src.size(), 0);
     dst += src.size();
 }

@@ -34,6 +34,8 @@ public:
 
     antlrcpp::Any visitInsert_into_table(SQLParser::Insert_into_tableContext *context) override;
 
+    antlrcpp::Any visitDescribe_table(SQLParser::Describe_tableContext *context) override;
+
 };
 
 

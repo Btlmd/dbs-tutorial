@@ -51,7 +51,7 @@ SlotID DataPage::Insert(std::shared_ptr<Record> record) {
     if (PAGE_SIZE - *slot_ptr - sizeof(SlotID) * header.slot_count - sizeof(SlotID) * 2 /* free space offset and new offset*/ < record_size) {
         Contiguous();
     }
-    assert(PAGE_SIZE - *slot_ptr - sizeof(SlotID) * header.slot_count - sizeof(SlotID) * 2 < record_size);
+    assert(PAGE_SIZE - *slot_ptr - sizeof(SlotID) * header.slot_count - sizeof(SlotID) * 2 >= record_size);
 
     uint8_t *dst{page->data + *slot_ptr};
     record->Write(dst);
@@ -61,5 +61,6 @@ SlotID DataPage::Insert(std::shared_ptr<Record> record) {
     header.free_space -= record_size;
     assert(header.free_space >= 0);
     page->SetDirty();
+    TraceLog << "Insert " << " @" << page->fd << " #" << page->id << " Slot " << header.slot_count << " : " << record->Repr();
     return header.slot_count++;
 }

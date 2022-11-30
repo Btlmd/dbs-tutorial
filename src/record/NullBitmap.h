@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <cassert>
+#include <memory>
 
 #include <defines.h>
 #include <utils/Serialization.h>
@@ -19,9 +20,14 @@ public:
     explicit NullBitmap(FieldID field_count) :
             field_count{field_count}, data{new uint8_t[(field_count + 7) / 8]} {}
 
-    explicit NullBitmap(const uint8_t *&src) {
-        read_var(src, field_count);
-        read_var(src, data, (field_count + 7) / 8);
+    static std::shared_ptr<NullBitmap> FromSrc(const uint8_t *&src, FieldID field_count) {
+        auto ret{std::make_shared<NullBitmap>(field_count)};
+        read_var(src, ret->data, (ret->field_count + 7) / 8);
+        return std::move(ret);
+    }
+
+    void Write(uint8_t *dst) const {
+        write_var(dst, data, (field_count + 7) / 8);
     }
 
     void Set(std::size_t idx) const {
@@ -39,10 +45,11 @@ public:
         return data[idx / 8] & (1 << (idx % 8));
     }
 
-
     ~NullBitmap() {
         delete[] data;
     }
+
+private:
 };
 
 

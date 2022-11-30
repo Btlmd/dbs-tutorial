@@ -4,9 +4,12 @@
 
 #include "DBSystem.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <optional>
 
+#include <magic_enum.hpp>
+#include <boost/algorithm/string/join.hpp>
 
 #include <defines.h>
 #include <io/FileSystem.h>
@@ -152,9 +155,10 @@ DBSystem::~DBSystem() {
     }
 }
 
-std::shared_ptr<Result> DBSystem::CreateTable(const std::string &table_name, const std::vector<std::shared_ptr<FieldMeta>> &field_meta,
-                                              std::optional<RawPrimaryKey> raw_pk,
-                                              const std::vector<RawForeignKey> &raw_fks) {
+std::shared_ptr<Result>
+DBSystem::CreateTable(const std::string &table_name, const std::vector<std::shared_ptr<FieldMeta>> &field_meta,
+                      std::optional<RawPrimaryKey> raw_pk,
+                      const std::vector<RawForeignKey> &raw_fks) {
     if (!on_use) {
         throw OperationError{"No database selected"};
     }
@@ -170,16 +174,16 @@ std::shared_ptr<Result> DBSystem::CreateTable(const std::string &table_name, con
     /**
      * on creation, field IDs are continuous. however, after deleting fields, this is not guaranteed
      */
-    meta_map[table_id] = std::make_shared<TableMeta>(0, FieldMeteTable{field_meta}, table_meta_fd[table_id], buffer);
+    auto meta{std::make_shared<TableMeta>(0, FieldMeteTable{field_meta}, table_meta_fd[table_id], buffer)};
 
     // primary key and foreign keys
 
     if (raw_pk) {
-        AddPrimaryKey(table_id, raw_pk.value());
+        AddPrimaryKey(meta, raw_pk.value());
     }
 
     for (const auto &fk: raw_fks) {
-        AddForeignKey(table_id, fk);
+        AddForeignKey(meta, fk);
     }
 
     // if all previous step succeed, create table in DBSystem
@@ -191,6 +195,7 @@ std::shared_ptr<Result> DBSystem::CreateTable(const std::string &table_name, con
     table_index_fd[table_id] = FileSystem::NewFile(
             DB_DIR / current_database / fmt::format(TABLE_INDEX_PATTERN, table_id));
     table_name_map.insert({table_name, table_id});
+    meta_map[table_id] = std::move(meta);
 
     return std::shared_ptr<Result>{new TextResult{"Query OK"}};
 }
@@ -209,19 +214,18 @@ std::shared_ptr<Result> DBSystem::ShowTables() const {
 
 std::shared_ptr<Result> DBSystem::AddForeignKey(const std::string &table_name, const RawForeignKey &raw_fk) {
     auto table_id{GetTableID(table_name)};
-    AddForeignKey(table_id, raw_fk);
+    AddForeignKey(meta_map[table_id], raw_fk);
     return std::shared_ptr<Result>{new TextResult{"Query OK"}};
 }
 
 std::shared_ptr<Result> DBSystem::AddPrimaryKey(const std::string &table_name, const RawPrimaryKey &raw_pk) {
     auto table_id{GetTableID(table_name)};
-    AddPrimaryKey(table_id, raw_pk);
+    AddPrimaryKey(meta_map[table_id], raw_pk);
     return std::shared_ptr<Result>{new TextResult{"Query OK"}};
 }
 
-void DBSystem::AddForeignKey(TableID table, const RawForeignKey &raw_fk) {
+void DBSystem::AddForeignKey(std::shared_ptr<TableMeta> &meta, const RawForeignKey &raw_fk) {
     auto &[fk_name, reference_table_name, fk_field_names, reference_field_names]{raw_fk};
-    auto meta{meta_map[table]};
 
     auto fk{std::make_shared<ForeignKey>()};
     if (fk_name.size() > CONSTRAINT_NAME_LEN_MAX) {
@@ -259,11 +263,10 @@ void DBSystem::AddForeignKey(TableID table, const RawForeignKey &raw_fk) {
     meta->foreign_keys.push_back(fk);
 }
 
-void DBSystem::AddPrimaryKey(TableID table_id, const RawPrimaryKey &raw_pk) {
+void DBSystem::AddPrimaryKey(std::shared_ptr<TableMeta> &meta, const RawPrimaryKey &raw_pk) {
     const auto &[pk_name, pk_fields]{raw_pk};
-    auto meta{meta_map[table_id]};
 
-    if (meta->primary_key) {
+    if (meta->primary_key != nullptr) {
         throw OperationError{"Multiple primary key defined"};
     }
 
@@ -321,7 +324,117 @@ std::shared_ptr<DataPage> DBSystem::FindPageWithSpace(TableID table_id, RecordSi
     return data_page;
 }
 
-void DBSystem::CheckConstraint(TableMeta &meta, Record &record) const {
+std::shared_ptr<Result> DBSystem::InsertResult() {
+    auto res{std::shared_ptr<Result>(new TextResult{fmt::format("{} records inserted", insert_record_counter)})};
+    insert_record_counter = 0;
+    return res;
+}
 
-    // foreign keys
+void DBSystem::CheckConstraint(const TableMeta &meta, const std::shared_ptr<Record> &record) const {
+    // check not null
+    for (int i{0}; i < meta.field_meta.Count(); ++i) {
+        if (record->nulls->Get(i) && meta.field_meta.field_seq[i]->not_null) {
+            throw OperationError{"Column `{}` cannot be null", meta.field_meta.field_seq[i]->name};
+        }
+    }
+
+    // TODO: check unique
+
+    // TODO: check primary key implies not null and unique
+    if (meta.primary_key != nullptr) {
+        for (int i{0}; i < meta.primary_key->field_count; ++i) {
+
+        }
+    }
+
+    // TODO: check foreign key
+    for (const auto &fk: meta.foreign_keys) {
+        for (int i{0}; i < fk->field_count; ++i) {
+
+        }
+    }
+}
+
+void DBSystem::Insert(TableID table_id, std::shared_ptr<Record> &record) {
+    auto page_to_insert{FindPageWithSpace(table_id, record->Size())};
+    page_to_insert->Insert(record);
+    ++insert_record_counter;
+}
+
+std::shared_ptr<Result> DBSystem::DescribeTable(const std::string &table_name) {
+    auto table_id{GetTableID(table_name)};
+    auto table_meta{meta_map[table_id]};
+    auto &id_meta{table_meta->field_meta.id_meta};
+
+    std::vector<std::string> header = {"Field", "Type", "Null", "Default"};
+    std::vector<std::vector<std::string>> field_detail;
+
+    // field meta
+    for (const auto &fm: table_meta->field_meta.field_seq) {
+        std::string type_name{magic_enum::enum_name(fm->type)};
+        if (fm->type == FieldType::CHAR || fm->type == FieldType::VARCHAR) {
+            type_name += fmt::format("({})", fm->max_size);
+        }
+        field_detail.push_back({
+                                       fm->name,
+                                       type_name,
+                                       fm->not_null ? "NO" : "YES",
+                                       fm->has_default ? fm->default_value->ToString() : "NULL"
+                               });
+    }
+
+    auto result{std::make_shared<TableResult>(header, field_detail)};
+
+    // primary key constraint
+    if (table_meta->primary_key != nullptr) {
+        std::string pk_fields;
+        for (int i{0}; i < table_meta->primary_key->field_count; ++i) {
+            pk_fields += id_meta[table_meta->primary_key->fields[i]]->name;
+            if (i != table_meta->primary_key->field_count - 1) {
+                pk_fields += ", ";
+            }
+        }
+        result->AddInfo(fmt::format("PRIMARY KEY ({})", pk_fields));
+    }
+
+    // unique constraints
+    std::vector<std::string> unique_field_names;
+    for (const auto &fm: table_meta->field_meta.field_seq) {
+        unique_field_names.push_back(fmt::format("UNIQUE ({});", fm->name));
+    }
+    std::sort(unique_field_names.begin(), unique_field_names.end());
+    std::for_each(unique_field_names.begin(), unique_field_names.end(),
+                  [&result](const auto &_info) { return result->AddInfo(_info); });
+
+    // foreign key constraints
+    for (const auto &fk: table_meta->foreign_keys) {
+        std::string fk_fields;
+        for (int i{0}; i < fk->field_count; ++i) {
+            fk_fields += id_meta[fk->fields[i]]->name;
+            if (i != fk->field_count - 1) {
+                fk_fields += ", ";
+            }
+        }
+
+        auto ref_name_iter{table_name_map.right.find(fk->reference_table)};
+        assert(ref_name_iter != table_name_map.right.end());
+        auto fk_reference_table_name{ref_name_iter->second};
+        auto &reference_id_name{meta_map[fk->reference_table]->field_meta.id_meta};
+        std::string fk_reference_fields;
+        for (int i{0}; i < fk->field_count; ++i) {
+            fk_reference_fields += reference_id_name[fk->reference_fields[i]]->name;
+            if (i != fk->field_count - 1) {
+                fk_reference_fields += ", ";
+            }
+        }
+
+        result->AddInfo(fmt::format(
+                "FOREIGN KEY {}({}) REFERENCES {}({})",
+                fk->name,
+                fk_fields,
+                fk_reference_table_name,
+                fk_reference_fields
+        ));
+    }
+
 }

@@ -51,18 +51,22 @@ public:
 
     /**
      * Insert `record` into table
-     * Caller has to ensure that the record is legal
-     * And Insert will do further
+     * Caller has to ensures that the record is legal
      * @param table
      * @param record
      */
-    void Insert(TableID table, std::shared_ptr<Record> record);
+    void Insert(TableID table, std::shared_ptr<Record> &record);
 
     std::shared_ptr<Result> Delete(const std::string &table_name);
 
     std::shared_ptr<Result> Select(const std::string &table_name);
 
-    void CheckConstraint(TableMeta& meta, Record& record) const;
+    /**
+     * Validate that the record satisfies all constraints specified by `meta`
+     * @param meta
+     * @param record
+     */
+    void CheckConstraint(const TableMeta& meta, const std::shared_ptr<Record> &record) const;
 
     /**
      * Get a const pointer to TableMeta of the specific table
@@ -88,6 +92,14 @@ public:
         return iter->second;
     }
 
+    /**
+     * Return the number of inserted records as a `Result`
+     * @return
+     */
+    std::shared_ptr<Result> InsertResult();
+
+    std::shared_ptr<Result> DescribeTable(const std::string &table_name);
+
 private:
     std::set<std::string> databases;
     std::string current_database;
@@ -99,6 +111,7 @@ private:
     std::unordered_map<TableID, std::shared_ptr<TableMeta>> meta_map;
     boost::bimap<std::string, TableID> table_name_map;
     bool on_use{false};
+    std::size_t insert_record_counter{0};
 
     BufferSystem buffer;
 
@@ -116,7 +129,7 @@ private:
      * @param table_id
      * @param raw_fk
      */
-    void AddForeignKey(TableID table_id, const RawForeignKey &raw_fk);
+    void AddForeignKey(std::shared_ptr<TableMeta> &meta, const RawForeignKey &raw_fk);
 
     /**
      * Add primary key to `table_id`
@@ -124,7 +137,7 @@ private:
      * @param table_id
      * @param raw_pk
      */
-    void AddPrimaryKey(TableID table_id, const RawPrimaryKey &raw_pk);
+    static void AddPrimaryKey(std::shared_ptr<TableMeta> &meta, const RawPrimaryKey &raw_pk);
 
     /**
      *

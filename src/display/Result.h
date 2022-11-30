@@ -20,16 +20,18 @@ public:
     virtual std::string ToString() = 0;
     virtual ~Result() = default;
     virtual void SetRuntime(double runtime);
+    virtual void AddInfo(const std::string &info);
 protected:
+    std::vector<std::string> infos;
     double runtime{-1};
 };
 
 class TableResult : public Result {
 public:
-    TableResult(const std::vector<std::string> &headers, const std::vector<std::vector<std::string>> &rows) :
-            headers{headers}, records{rows}, table{nullptr} {}
+    TableResult(std::vector<std::string> headers, std::vector<std::vector<std::string>> rows) :
+            headers{std::move(headers)}, records{std::move(rows)}, table{nullptr} {}
 
-    TableResult(const std::vector<std::string> &headers, const RecordList &record_list);
+    TableResult(std::vector<std::string> headers, const RecordList &record_list);
 
     std::string ToString() override;
 
@@ -44,7 +46,7 @@ public:
 
 class TextResult : public Result {
 public:
-    explicit TextResult(const std::string &message) : Result{}, text{message} {}
+    explicit TextResult(std::string message) : Result{}, text{std::move(message)} {}
 
     std::string ToString() override;
 
