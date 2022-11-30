@@ -16,7 +16,7 @@
 #include <display/Result.h>
 #include <record/TableMeta.h>
 
-Result *DBSystem::CreateDatabase(const std::string &db_name) {
+std::shared_ptr<Result> DBSystem::CreateDatabase(const std::string &db_name) {
     if (databases.find(db_name) != databases.end()) {
         throw OperationError{"Can't create database '{}'; database exists", db_name};
     }
@@ -34,7 +34,7 @@ Result *DBSystem::CreateDatabase(const std::string &db_name) {
 
     databases.insert(db_name);
 
-    return new TextResult{"Database created"};
+    return std::shared_ptr<Result>{new TextResult{"Database created"}};
 }
 
 void DBSystem::Init() {
@@ -49,7 +49,7 @@ void DBSystem::Init() {
     }
 }
 
-Result *DBSystem::UseDatabase(const std::string &db_name) {
+std::shared_ptr<Result> DBSystem::UseDatabase(const std::string &db_name) {
     if (databases.find(db_name) == databases.end()) {
         throw OperationError{"Unknown database '{}'", db_name};
     }
@@ -84,10 +84,10 @@ Result *DBSystem::UseDatabase(const std::string &db_name) {
     }
 
     current_database = db_name;
-    return new TextResult{"Database changed"};
+    return std::shared_ptr<Result>{new TextResult{"Database changed"}};
 }
 
-Result *DBSystem::DropDatabase(const std::string &db_name) {
+std::shared_ptr<Result> DBSystem::DropDatabase(const std::string &db_name) {
     if (databases.find(db_name) == databases.end()) {
         throw OperationError{"Can't drop database '{}'; database doesn't exist", db_name};
     }
@@ -99,7 +99,7 @@ Result *DBSystem::DropDatabase(const std::string &db_name) {
     FileSystem::RemoveDirectory(DB_DIR / db_name);
     databases.erase(db_name);
 
-    return new TextResult{"Database dropped"};
+    return std::shared_ptr<Result>{new TextResult{"Database dropped"}};
 }
 
 void DBSystem::CloseDatabase() {
@@ -116,7 +116,7 @@ void DBSystem::CloseDatabase() {
 
     // close file descriptors
 
-    auto close_func = [this](const std::pair<TableID, FileID>& relation)-> void {
+    auto close_func = [this](const std::pair<TableID, FileID> &relation) -> void {
         buffer.CloseFile(relation.second);
     };
     std::for_each(table_meta_fd.begin(), table_meta_fd.end(), close_func);
@@ -134,12 +134,12 @@ void DBSystem::CloseDatabase() {
     on_use = false;
 }
 
-Result *DBSystem::ShowDatabases() const {
+std::shared_ptr<Result> DBSystem::ShowDatabases() const {
     std::vector<std::vector<std::string>> db_name_buffer;
     for (const auto &db_name: databases) {
         db_name_buffer.emplace_back(std::vector<std::string>{{db_name}});
     }
-    return new TableResult{{"Database"}, db_name_buffer};
+    return std::shared_ptr<Result>{new TableResult{{"Database"}, db_name_buffer}};
 }
 
 DBSystem::DBSystem() {
@@ -152,8 +152,9 @@ DBSystem::~DBSystem() {
     }
 }
 
-Result *DBSystem::CreateTable(const std::string &table_name, const std::vector<FieldMeta *> &field_meta,
-                              std::optional<RawPrimaryKey> raw_pk, const std::vector<RawForeignKey> &raw_fks) {
+std::shared_ptr<Result> DBSystem::CreateTable(const std::string &table_name, const std::vector<std::shared_ptr<FieldMeta>> &field_meta,
+                                              std::optional<RawPrimaryKey> raw_pk,
+                                              const std::vector<RawForeignKey> &raw_fks) {
     if (!on_use) {
         throw OperationError{"No database selected"};
     }
@@ -169,7 +170,7 @@ Result *DBSystem::CreateTable(const std::string &table_name, const std::vector<F
     /**
      * on creation, field IDs are continuous. however, after deleting fields, this is not guaranteed
      */
-    meta_map[table_id] = new TableMeta{0, {field_meta}, table_meta_fd[table_id], buffer};
+    meta_map[table_id] = std::make_shared<TableMeta>(0, FieldMeteTable{field_meta}, table_meta_fd[table_id], buffer);
 
     // primary key and foreign keys
 
@@ -191,38 +192,38 @@ Result *DBSystem::CreateTable(const std::string &table_name, const std::vector<F
             DB_DIR / current_database / fmt::format(TABLE_INDEX_PATTERN, table_id));
     table_name_map.insert({table_name, table_id});
 
-    return new TextResult{"Query OK"};
+    return std::shared_ptr<Result>{new TextResult{"Query OK"}};
 }
 
-Result *DBSystem::DropTable(const std::string &table_name) {
+std::shared_ptr<Result> DBSystem::DropTable(const std::string &table_name) {
 
 }
 
-Result *DBSystem::ShowTables() const {
+std::shared_ptr<Result> DBSystem::ShowTables() const {
     std::vector<std::vector<std::string>> table_name_buffer;
     for (const auto &[name, tid]: table_name_map) {
         table_name_buffer.push_back({{name}});
     }
-    return new TableResult{{fmt::format("Tables_in_{}", current_database)}, table_name_buffer};
+    return std::shared_ptr<Result>{new TableResult{{fmt::format("Tables_in_{}", current_database)}, table_name_buffer}};
 }
 
-Result *DBSystem::AddForeignKey(const std::string &table_name, const RawForeignKey &raw_fk) {
+std::shared_ptr<Result> DBSystem::AddForeignKey(const std::string &table_name, const RawForeignKey &raw_fk) {
     auto table_id{GetTableID(table_name)};
     AddForeignKey(table_id, raw_fk);
-    return new TextResult{"Query OK"};
+    return std::shared_ptr<Result>{new TextResult{"Query OK"}};
 }
 
-Result *DBSystem::AddPrimaryKey(const std::string &table_name, const RawPrimaryKey &raw_pk) {
+std::shared_ptr<Result> DBSystem::AddPrimaryKey(const std::string &table_name, const RawPrimaryKey &raw_pk) {
     auto table_id{GetTableID(table_name)};
     AddPrimaryKey(table_id, raw_pk);
-    return new TextResult{"Query OK"};
+    return std::shared_ptr<Result>{new TextResult{"Query OK"}};
 }
 
 void DBSystem::AddForeignKey(TableID table, const RawForeignKey &raw_fk) {
     auto &[fk_name, reference_table_name, fk_field_names, reference_field_names]{raw_fk};
     auto meta{meta_map[table]};
 
-    auto fk{new ForeignKey};
+    auto fk{std::make_shared<ForeignKey>()};
     if (fk_name.size() > CONSTRAINT_NAME_LEN_MAX) {
         throw OperationError{"Identifier name '{}' is too long", fk_name};
     }
@@ -266,7 +267,7 @@ void DBSystem::AddPrimaryKey(TableID table_id, const RawPrimaryKey &raw_pk) {
         throw OperationError{"Multiple primary key defined"};
     }
 
-    auto pk{new PrimaryKey};
+    auto pk{std::make_shared<PrimaryKey>()};
     if (pk_name.size() > CONSTRAINT_NAME_LEN_MAX) {
         throw OperationError{"Identifier name '{}' is too long", pk_name};
     }
@@ -292,10 +293,35 @@ bool DBSystem::CheckTableExist(const std::string &table_name) const noexcept {
     return table_name_map.left.find(table_name) != table_name_map.left.end();
 }
 
-TableID DBSystem::GetTableID(const std::string &table_name) const {
-    auto iter{table_name_map.left.find(table_name)};
-    if (iter == table_name_map.left.end()) {
-        throw OperationError{"Table `{}` does not exist", table_name};
+std::shared_ptr<DataPage> DBSystem::FindPageWithSpace(TableID table_id, RecordSize size) {
+    /**
+     * TODO: [c7w] implement FreeSpaceMap
+     * See
+     *  - https://thu-db.github.io/dbs-tutorial/chapter-2/variable.html
+     *  - https://github.com/postgres/postgres/blob/master/src/backend/storage/freespace/README
+     */
+    auto &meta{meta_map[table_id]};
+
+    /**
+     * Dummy implementation: check page by page
+     */
+    auto data_fd{table_data_fd[table_id]};
+    for (int i{0}; i < meta->page_count; ++i) {
+        auto page{buffer.ReadPage(data_fd, i)};
+        auto data_page{std::make_shared<DataPage>(page, *meta)};
+        if (data_page->Contains(size)) {
+            return data_page;
+        }
     }
-    return iter->second;
+
+    // no enough space on current pages
+    auto page{buffer.CreatePage(data_fd, meta->page_count++)};
+    auto data_page{std::make_shared<DataPage>(page, *meta)};
+    data_page->Init();
+    return data_page;
+}
+
+void DBSystem::CheckConstraint(TableMeta &meta, Record &record) const {
+
+    // foreign keys
 }

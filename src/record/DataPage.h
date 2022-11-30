@@ -39,14 +39,14 @@ public:
     explicit DataPage(Page *page, TableMeta &table_meta) : header{*reinterpret_cast<PageHeader *>(page->data)},
                                                            page{page}, meta{table_meta} {}
 
-    [[nodiscard]] Record *GetRecord(SlotID slot) const;
+    [[nodiscard]] std::shared_ptr<Record> GetRecord(SlotID slot) const;
 
     /**
      * Insert record into the end of page
      * May trigger DataPage::Contiguous if necessary
      * @param record
      */
-    SlotID Insert(Record *record);
+    SlotID Insert(std::shared_ptr<Record> record);
 
     /**
      * Mark `slot` as invalid
@@ -60,7 +60,21 @@ public:
      * @param slot
      * @param record
      */
-    void Update(SlotID slot, Record *record);
+    void Update(SlotID slot, std::shared_ptr<Record> record);
+
+    [[nodiscard]] bool Contains(RecordSize record_size) const {
+        return header.free_space - sizeof(SlotID) >= record_size;
+    }
+
+    /**
+     * Initialize the page structure
+     * Used when the page is first created
+     */
+    void Init() {
+        header.slot_count = 0;
+        header.free_space = PAGE_SIZE - sizeof(PageHeader) - sizeof(SlotID);
+        *FooterSlot(0) = sizeof(PageHeader);
+    }
 
 private:
     /**
@@ -72,10 +86,6 @@ private:
     [[nodiscard]] SlotID *FooterSlot(SlotID slot) const {
         uint8_t *slot_begin{page->data + PAGE_SIZE - sizeof(SlotID) - sizeof(SlotID) * slot};
         return reinterpret_cast<SlotID *>(slot_begin);
-    }
-
-    [[nodiscard]] bool Contains(RecordSize record_size) const {
-        return header.free_space - sizeof(SlotID) >= record_size;
     }
 };
 

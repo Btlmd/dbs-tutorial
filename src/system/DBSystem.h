@@ -17,6 +17,7 @@
 #include <io/BufferSystem.h>
 #include <record/Field.h>
 #include <record/TableMeta.h>
+#include <record/DataPage.h>
 
 class DBSystem {
 public:
@@ -24,46 +25,78 @@ public:
 
     ~DBSystem();
 
-    Result *CreateDatabase(const std::string &db_name);
+    std::shared_ptr<Result> CreateDatabase(const std::string &db_name);
 
-    Result *UseDatabase(const std::string &db_name);
+    std::shared_ptr<Result> UseDatabase(const std::string &db_name);
 
-    Result *DropDatabase(const std::string &db_name);
+    std::shared_ptr<Result> DropDatabase(const std::string &db_name);
 
-    Result *ShowDatabases() const;
+    std::shared_ptr<Result> ShowDatabases() const;
 
 
-    Result *CreateTable(const std::string &table_name, const std::vector<FieldMeta *> &field_meta,
+    std::shared_ptr<Result> CreateTable(const std::string &table_name, const std::vector<std::shared_ptr<FieldMeta>> &field_meta,
                         std::optional<RawPrimaryKey> raw_pk, const std::vector<RawForeignKey> &raw_fks);
 
-    Result *DropTable(const std::string &table_name);
+    std::shared_ptr<Result> DropTable(const std::string &table_name);
 
-    Result *ShowTables() const;
+    std::shared_ptr<Result> ShowTables() const;
 
-    Result *AddForeignKey(const std::string &table_name, const RawForeignKey &raw_fk);
+    std::shared_ptr<Result> AddForeignKey(const std::string &table_name, const RawForeignKey &raw_fk);
 
-    Result *AddPrimaryKey(const std::string &table_name, const RawPrimaryKey &raw_pk);
+    std::shared_ptr<Result> AddPrimaryKey(const std::string &table_name, const RawPrimaryKey &raw_pk);
 
-    Result *DropForeignKey(const std::string &table_name, const std::string fk_name);
+    std::shared_ptr<Result> DropForeignKey(const std::string &table_name, const std::string fk_name);
 
-    Result *DropPrimaryKey(const std::string &table_name, const std::string fk_name);
+    std::shared_ptr<Result> DropPrimaryKey(const std::string &table_name, const std::string fk_name);
 
-    Result *Insert(std::string &table_name, std::vector<Field *> &fields);
+    /**
+     * Insert `record` into table
+     * Caller has to ensure that the record is legal
+     * And Insert will do further
+     * @param table
+     * @param record
+     */
+    void Insert(TableID table, std::shared_ptr<Record> record);
 
-    Result *Delete(std::string &table_name);
+    std::shared_ptr<Result> Delete(const std::string &table_name);
 
-    Result *Select(std::string &table_name);
+    std::shared_ptr<Result> Select(const std::string &table_name);
+
+    void CheckConstraint(TableMeta& meta, Record& record) const;
+
+    /**
+     * Get a const pointer to TableMeta of the specific table
+     * @param table_id
+     * @return
+     */
+    std::shared_ptr<const TableMeta> GetTableMeta(TableID table_id) {
+        assert(meta_map.find(table_id) != meta_map.end());
+        return meta_map[table_id];
+    }
+
+    /**
+     * If table exists, return table_id
+     * Otherwise throw exception
+     * @param table_name
+     * @return
+     */
+    TableID GetTableID(const std::string &table_name) const {
+        auto iter{table_name_map.left.find(table_name)};
+        if (iter == table_name_map.left.end()) {
+            throw OperationError{"Table `{}` does not exist", table_name};
+        }
+        return iter->second;
+    }
 
 private:
     std::set<std::string> databases;
     std::string current_database;
     TableID table_count{-1};
-    TableID next_table_id{-1};
     FileID table_info_fd{-1};
     std::unordered_map<TableID, FileID> table_data_fd;
     std::unordered_map<TableID, FileID> table_meta_fd;
     std::unordered_map<TableID, FileID> table_index_fd;
-    std::unordered_map<TableID, TableMeta *> meta_map;
+    std::unordered_map<TableID, std::shared_ptr<TableMeta>> meta_map;
     boost::bimap<std::string, TableID> table_name_map;
     bool on_use{false};
 
@@ -77,7 +110,6 @@ private:
         return tid;
     }
 
-    void
 
     /**
      * Add foreign key to `table_id`
@@ -102,14 +134,6 @@ private:
     bool CheckTableExist(const std::string &table_name) const noexcept;
 
     /**
-     * If table exists, return table_id
-     * Otherwise throw exception
-     * @param table_name
-     * @return
-     */
-    TableID GetTableID(const std::string &table_name) const;
-
-    /**
      * Close the currently used database
      * If do database is currently used, throw exception
      */
@@ -119,6 +143,16 @@ private:
      * Initialize the system
      */
     void Init();
+
+    /**
+     * Find a page with `size` bytes of free space
+     * If there is no such page, create a new one and return
+     * @param table_id
+     * @param size
+     * @return
+     */
+    std::shared_ptr<DataPage> FindPageWithSpace(TableID table_id, RecordSize size);
+
 };
 
 #endif //DBS_TUTORIAL_DBSYSTEM_H

@@ -22,7 +22,7 @@ TableResult::TableResult(const std::vector<std::string> &headers, const RecordLi
     std::vector<std::string> buffer;
     for (const auto &record: record_list) {
         buffer.clear();
-        std::transform(record.fields.cbegin(), record.fields.cend(), buffer.end(), [](Field *const &f) {
+        std::transform(record.fields.cbegin(), record.fields.cend(), buffer.end(), [](std::shared_ptr<Field>const &f) {
             return f->ToString();
         });
         records.emplace_back(std::move(buffer));

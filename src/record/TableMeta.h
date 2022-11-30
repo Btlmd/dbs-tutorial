@@ -21,20 +21,27 @@
 class FieldMeteTable {
 public:
     std::unordered_map<std::string, FieldID> name_id;
-    std::map<FieldID, FieldMeta *> id_meta;
-    std::vector<FieldID> field_seq;
+    std::map<FieldID, std::shared_ptr<FieldMeta>> id_meta;
+//    std::vector<FieldID> field_seq;
+    std::vector<std::shared_ptr<FieldMeta>> field_seq;
 
-    FieldMeteTable(const std::vector<FieldMeta *> &field_meta) {
-        for (auto fm: field_meta) {
+    explicit FieldMeteTable(std::vector<std::shared_ptr<FieldMeta>> field_meta) {
+        for (const auto& fm: field_meta) {
             name_id.insert({fm->name, fm->field_id});
             id_meta.insert({fm->field_id, fm});
-            field_seq.push_back(fm->field_id);
         }
+        field_seq = std::move(field_meta);
     }
 
     FieldMeteTable() = default;
 
-    void Insert(FieldMeta *fm) {
+    FieldID Count() const {
+        assert(name_id.size() == id_meta.size());
+        assert(name_id.size() == field_seq.size());
+        return name_id.size();
+    }
+
+    void Insert(const std::shared_ptr<FieldMeta>& fm) {
         name_id.insert({fm->name, fm->field_id});
         id_meta.insert({fm->field_id, fm});
     }
@@ -62,31 +69,17 @@ public:
 
     PageID page_count;
     FieldMeteTable field_meta;
-    PrimaryKey *primary_key{nullptr};
-    std::vector<ForeignKey *> foreign_keys;
+    std::shared_ptr<PrimaryKey> primary_key{nullptr};
+    std::vector<std::shared_ptr<ForeignKey>> foreign_keys;
 
     void Write();
 
-    static TableMeta *FromSrc(FileID fd, BufferSystem &buffer);
+    static std::shared_ptr<TableMeta> FromSrc(FileID fd, BufferSystem &buffer);
 
     TableMeta(PageID page_count, FieldMeteTable field_meta, FileID fd, BufferSystem &buffer)
             : fd{fd}, page_count{page_count}, field_meta{std::move(field_meta)}, buffer{buffer} {}
 
-    ~TableMeta() {
-        delete primary_key;
-
-        /** not best practice,
-         *  but I've already written so many factories that yields a raw pointer
-         *  :(
-         */
-        for (auto &fk: foreign_keys) {
-            delete fk;
-        }
-    }
-
-    PageID FindFreeSpace(RecordSize size);
-
-    RecordSize
+    ~TableMeta() {}
 
 private:
     TableMeta(BufferSystem buffer) : buffer{buffer} {}

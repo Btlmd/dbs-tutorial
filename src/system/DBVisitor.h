@@ -32,6 +32,8 @@ public:
 
     antlrcpp::Any visitField_list(SQLParser::Field_listContext *ctx) override;
 
+    antlrcpp::Any visitInsert_into_table(SQLParser::Insert_into_tableContext *context) override;
+
 };
 
 

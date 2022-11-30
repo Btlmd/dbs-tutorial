@@ -15,15 +15,21 @@ class TableMeta;
 class Record {
 public:
     NullBitmap nulls;
-    std::vector<Field *> fields;
+    std::vector<std::shared_ptr<Field>> fields;
 
-    Record(const NullBitmap &nulls, const std::vector<Field *> &&fields);
+    Record(const NullBitmap &nulls, const std::vector<std::shared_ptr<Field>> &&fields);
 
-    static Record *FromSrc(const uint8_t *&src, TableMeta &meta);
+    static std::shared_ptr<Record> FromSrc(const uint8_t *&src, TableMeta &meta);
 
     void Write(uint8_t *&dst);
 
-    RecordSize Size();
+    RecordSize Size() {
+        RecordSize size{0};
+        for (const auto &f: fields) {
+            size += f->Size();
+        }
+        return size;
+    }
 };
 
 typedef std::vector<Record> RecordList;

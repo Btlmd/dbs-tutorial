@@ -51,5 +51,7 @@ public:
     std::string text;
 };
 
+// The results of a `program`
+typedef std::vector<std::shared_ptr<Result>> ResultList;
 
 #endif //DBS_TUTORIAL_RESULT_H

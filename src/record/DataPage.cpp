@@ -21,7 +21,7 @@ void DataPage::Contiguous() {
     page->SetDirty();
 }
 
-Record *DataPage::GetRecord(SlotID slot) const {
+std::shared_ptr<Record> DataPage::GetRecord(SlotID slot) const {
     auto offset{*FooterSlot(slot)};  // offset of a slot, from the very beginning of the page
     if (offset < 0) {  // invalid slot
         return nullptr;
@@ -30,7 +30,7 @@ Record *DataPage::GetRecord(SlotID slot) const {
     return Record::FromSrc(src, meta);
 }
 
-void DataPage::Update(SlotID slot, Record *record) {
+void DataPage::Update(SlotID slot, std::shared_ptr<Record> record) {
     auto record_size{record->Size()};
     auto slot_ptr{FooterSlot(slot)};
     assert(slot_ptr[-1] - slot_ptr[0] - record_size >= 0);
@@ -45,7 +45,7 @@ void DataPage::Delete(SlotID slot) {
     page->SetDirty();
 }
 
-SlotID DataPage::Insert(Record *record) {
+SlotID DataPage::Insert(std::shared_ptr<Record> record) {
     auto record_size{record->Size()};
     auto slot_ptr{FooterSlot(header.slot_count)};
     if (PAGE_SIZE - *slot_ptr - sizeof(SlotID) * header.slot_count - sizeof(SlotID) * 2 /* free space offset and new offset*/ < record_size) {

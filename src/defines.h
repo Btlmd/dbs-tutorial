@@ -14,6 +14,7 @@
 #include <tuple>
 #include <filesystem>
 #include <limits>
+#include <variant>
 #include <support/Any.h>
 
 
@@ -31,8 +32,9 @@ typedef struct {
     SlotID slot;
 } RecordID;
 
-// The results of a `program`
-typedef std::vector<antlrcpp::Any> ResultList;
+typedef std::variant<std::string, float, int> Value;
+
+typedef std::vector<Value> ValueList;
 
 // ForeignKey from std::string (to be further transformed into IDs)
 typedef std::tuple<std::string, std::string, std::vector<std::string>, std::vector<std::string>> RawForeignKey;

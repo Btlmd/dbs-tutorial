@@ -45,6 +45,8 @@ public:
 
     Field() = default;
 
+    virtual ~Field() = default;
+
     /**
      * Return the size of the field in storage
      * @return
@@ -62,7 +64,7 @@ public:
 
     virtual std::partial_ordering operator<=>(const Field &rhs) const = 0;
 
-    static Field *LoadField(FieldType type, const uint8_t *&src, RecordSize max_len = -1);
+    static std::shared_ptr<Field> LoadField(FieldType type, const uint8_t *&src, RecordSize max_len = -1);
 };
 
 class Int : public Field {
@@ -71,10 +73,10 @@ public:
 
     Int(int value) : Field{FieldType::INT}, value{value} {}
 
-    static Int *FromSrc(const uint8_t *&src) {
+    static std::shared_ptr<Int> FromSrc(const uint8_t *&src) {
         int value;
         read_var(src, value);
-        return new Int{value};
+        return std::make_shared<Int>(value);
     }
 
     std::partial_ordering operator<=>(const Field &rhs) const override {
@@ -104,10 +106,10 @@ public:
 
     Float(float value) : Field{FieldType::FLOAT}, value{value} {}
 
-    static Float *FromSrc(const uint8_t *&src) {
+    static std::shared_ptr<Float> FromSrc(const uint8_t *&src) {
         float value;
         read_var(src, value);
-        return new Float{value};
+        return std::make_shared<Float>(value);
     }
 
     std::partial_ordering operator<=>(const Field &rhs) const override {
@@ -144,8 +146,8 @@ public:
         delete[] data;
     }
 
-    static Char *FromSrc(const uint8_t *&src, RecordSize max_len) {
-        auto ret{new Char{max_len}};
+    static std::shared_ptr<Char> FromSrc(const uint8_t *&src, RecordSize max_len) {
+        auto ret{std::make_shared<Char>(max_len)};
         read_var(src, ret->data, max_len + 1);
         return ret;
     }
@@ -183,6 +185,7 @@ public:
     RecordSize str_len;
 
     VarChar() = default;
+
     VarChar(const std::string &stream) {
         str_len = stream.size();
         data = new char[str_len + 1];
@@ -193,8 +196,8 @@ public:
         delete[] data;
     }
 
-    static VarChar *FromSrc(const uint8_t *&src) {
-        auto ret{new VarChar};
+    static std::shared_ptr<VarChar> FromSrc(const uint8_t *&src) {
+        auto ret{std::make_shared<VarChar>()};
         read_var(src, ret->str_len);
         ret->data = new char[ret->str_len + 1];
         read_var(src, ret->data, ret->str_len);
@@ -240,7 +243,7 @@ public:
     bool unique{false};
     bool not_null{false};
     bool has_default{false};
-    Field *default_value{nullptr};
+    std::shared_ptr<Field> default_value{nullptr};
 
     [[nodiscard]] std::size_t Size() const {
         return sizeof(FieldMeta) - sizeof(std::string) + sizeof(std::size_t) + name.size();
@@ -277,7 +280,7 @@ public:
     }
 };
 
-inline Field *Field::LoadField(FieldType type, const uint8_t *&src, RecordSize max_len) {
+inline std::shared_ptr<Field> Field::LoadField(FieldType type, const uint8_t *&src, RecordSize max_len) {
     switch (type) {
         case FieldType::INT:
             return Int::FromSrc(src);

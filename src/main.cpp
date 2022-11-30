@@ -46,22 +46,21 @@ using Term::Terminal;
 
 void process_input(std::string &in_string, DBVisitor &visitor) {
     try {
-    antlr4::ANTLRInputStream input{in_string};
-    SQLLexer lexer{&input};
-    antlr4::CommonTokenStream tokens(&lexer);
-    tokens.fill();
-    SQLParser parser{&tokens};
-    antlr4::tree::ParseTree *tree{parser.program()};
-    if (parser.getNumberOfSyntaxErrors() > 0) {
-        throw OperationError{"Syntax Error"};
-    }
-    TraceLog << "Syntax Tree:" << tree->toStringTree(&parser);
-    auto results{tree->accept(&visitor)};
-    for (auto &result: *results.as<ResultList *>()) {
-        auto result_ptr = result.as<Result *>();
-        std::cout << result_ptr->ToString() << std::endl;
-        delete result_ptr;
-    }
+        antlr4::ANTLRInputStream input{in_string};
+        SQLLexer lexer{&input};
+        antlr4::CommonTokenStream tokens(&lexer);
+        tokens.fill();
+        SQLParser parser{&tokens};
+        antlr4::tree::ParseTree *tree{parser.program()};
+        if (parser.getNumberOfSyntaxErrors() > 0) {
+            throw OperationError{"Syntax Error"};
+        }
+        TraceLog << "Syntax Tree:" << tree->toStringTree(&parser);
+        auto results{tree->accept(&visitor)};
+        auto &result_list{*results.as<std::shared_ptr<ResultList>>()};
+        for (auto &result_ptr: result_list) {
+            std::cout << result_ptr->ToString() << std::endl;
+        }
     } catch (const OperationError &e) {
         std::cout << e.what() << std::endl;
     }
@@ -143,10 +142,9 @@ int main() {
 ////                          "    FOREIGN KEY fk_name (int_f0, int_f1) REFERENCES tt(int_f2, int_f3)\n"
 //                          ");"};
 //        process_input(batch, visitor);
-            for (std::string batch; std::getline(std::cin, batch); )
-            {
-                process_input(batch, visitor);
-            }
+        for (std::string batch; std::getline(std::cin, batch);) {
+            process_input(batch, visitor);
+        }
 #ifdef DEBUG
         return 0;
 #endif
