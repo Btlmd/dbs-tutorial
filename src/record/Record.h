@@ -23,7 +23,9 @@ class Record {
 public:
     std::vector<std::shared_ptr<Field>> fields;
 
-    Record(std::vector<std::shared_ptr<Field>> fields);
+    explicit Record() = default;
+
+    explicit Record(std::vector<std::shared_ptr<Field>> fields);
 
     /**
      * Build a record from source, using information from `meta`
@@ -31,7 +33,7 @@ public:
      * @param meta
      * @return
      */
-    static std::shared_ptr<Record> FromSrc(const uint8_t *&src, TableMeta &meta);
+    static std::shared_ptr<Record> FromSrc(const uint8_t *&src, const TableMeta &meta);
 
     /**
      * Serialize the record into `dst`

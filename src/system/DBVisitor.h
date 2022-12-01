@@ -13,13 +13,11 @@
 class DBVisitor : public SQLBaseVisitor {
 private:
     DBSystem &system;
-    std::set<TableID> selected_tables;
+    std::vector<TableID> selected_tables;
 
     static std::shared_ptr<Cmp> ConvertOperator(SQLParser::Operator_Context *ctx);
 
     static std::shared_ptr<Field> GetValue(SQLParser::ValueContext *ctx, const std::shared_ptr<FieldMeta> &selected_field, bool ignore_max_size = false);
-
-
 
 public:
     explicit DBVisitor(DBSystem &system_mgr) : system{system_mgr} {}
@@ -65,7 +63,6 @@ public:
     antlrcpp::Any visitWhere_like_string(SQLParser::Where_like_stringContext *ctx) override;
 
     antlrcpp::Any visitColumn(SQLParser::ColumnContext *ctx) override;
-
 
 };
 

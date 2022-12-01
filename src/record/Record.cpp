@@ -22,7 +22,7 @@ void Record::Write(uint8_t *&dst) {
     }
 }
 
-std::shared_ptr<Record> Record::FromSrc(const uint8_t *&src, TableMeta &meta) {
+std::shared_ptr<Record> Record::FromSrc(const uint8_t *&src, const TableMeta &meta) {
     auto field_count{meta.field_meta.Count()};
     auto nulls = NullBitmap::FromSrc(src, field_count);
     std::vector<std::shared_ptr<Field>> fields;

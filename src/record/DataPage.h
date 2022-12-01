@@ -34,9 +34,9 @@ public:
     } &header;
 
     Page *page;
-    TableMeta &meta;
+    const TableMeta &meta;
 
-    explicit DataPage(Page *page, TableMeta &table_meta) : header{*reinterpret_cast<PageHeader *>(page->data)},
+    explicit DataPage(Page *page, const TableMeta &table_meta) : header{*reinterpret_cast<PageHeader *>(page->data)},
                                                            page{page}, meta{table_meta} {}
 
     [[nodiscard]] std::shared_ptr<Record> GetRecord(SlotID slot) const;

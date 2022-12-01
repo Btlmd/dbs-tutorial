@@ -200,7 +200,7 @@ public:
  */
 class AndCondition : public FilterCondition {
 public:
-    const FilterConditionList conditions;
+    FilterConditionList conditions;
 
     explicit AndCondition(FilterConditionList conditions, TableID table_id) :
             FilterCondition{table_id}, conditions{std::move(conditions)} {
@@ -212,27 +212,88 @@ public:
         return std::ranges::all_of(conditions.begin(), conditions.end(),
                                    [&record](const auto &cond) { return (*cond)(record); });
     }
+
+    [[nodiscard]] std::size_t Size() const {
+        return conditions.size();
+    }
+
+    void AddCondition(std::shared_ptr<FilterCondition> cond) {
+        conditions.push_back(std::move(cond));
+    }
 };
 
+typedef std::pair<TableID, TableID> JoinPair;
 typedef std::tuple<FieldID, FieldID, std::shared_ptr<Cmp>> JoinCond;
+
+/**
+ * Ensure an ascending pair
+ * @param original
+ * @return
+ */
+inline JoinPair make_ordered(const JoinPair &original) {
+    assert(original.first != original.second);
+    if (original.first < original.second) {
+        return original;
+    }
+    return std::make_pair(original.second, original.first);
+}
+
 
 /**
  * Record Join Condition, with conjunct comparers (since disjunction is not yet supported in the grammar)
  */
 class JoinCondition : public Condition {
 public:
+    JoinPair tables;
     std::vector<JoinCond> conditions;
 
-    explicit JoinCondition(std::vector<JoinCond> conditions) : Condition{ConditionType::JOIN},
-                                                               conditions{std::move(conditions)} {}
+    explicit JoinCondition(std::vector<JoinCond> conditions, JoinPair tables) :
+            Condition{ConditionType::JOIN}, conditions{std::move(conditions)}, tables{std::move(make_ordered(tables))} {}
 
-    bool operator()(std::shared_ptr<Record> &lhs, std::shared_ptr<Record> &rhs) const {
+    bool operator()(const std::shared_ptr<Record> &lhs, const std::shared_ptr<Record> &rhs) const {
         return std::ranges::all_of(conditions.begin(), conditions.end(), [&lhs, &rhs](const auto &cond) {
             return (*std::get<2>(cond))(lhs->fields[std::get<0>(cond)], rhs->fields[std::get<1>(cond)]);
         });
     }
+
+    void Swap() {
+        for (auto&[lhs, rhs, _]: conditions) {
+            std::swap(lhs, rhs);
+        }
+        std::swap(tables.first, tables.second);
+    }
+
+    void MatchSeq(const JoinPair &other) {
+        assert(make_ordered(other) == make_ordered(tables));
+        if (other.first != tables.first) {
+            Swap();
+        }
+    }
+
+    static void Merge(std::shared_ptr<JoinCondition> &dst, const std::shared_ptr<JoinCondition> &other) {
+        if (dst != other){
+            assert(dst->tables == other->tables);
+            std::copy(other->conditions.cbegin(), other->conditions.cend(), std::back_inserter(dst->conditions));
+        }
+    }
+
+    static std::shared_ptr<JoinCondition> Merge(const std::vector<std::shared_ptr<JoinCondition>> &conditions) {
+        assert(conditions.size() > 0);
+        auto ret{std::make_shared<JoinCondition>(std::vector<JoinCond>{}, conditions[0]->tables)};
+        for (const auto& cond: conditions) {
+            Merge(ret, cond);
+        }
+        return std::move(ret);
+    }
 };
 
+/**
+ * Make a condition shared_ptr
+ * @tparam T
+ * @tparam Args
+ * @param args
+ * @return
+ */
 template<typename T, typename... Args>
 inline std::shared_ptr<Condition>
 make_cond(Args &&... args) {

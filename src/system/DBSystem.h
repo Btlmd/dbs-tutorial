@@ -18,6 +18,8 @@
 #include <record/Field.h>
 #include <record/TableMeta.h>
 #include <record/DataPage.h>
+#include <node/OpNode.h>
+#include <system/WhereConditions.h>
 
 class DBSystem {
 public:
@@ -98,7 +100,14 @@ public:
      */
     std::shared_ptr<Result> InsertResult();
 
+    /**
+     * Describe table query
+     * @param table_name
+     * @return
+     */
     std::shared_ptr<Result> DescribeTable(const std::string &table_name);
+
+    std::shared_ptr<OpNode> GetTrivialScanNode(TableID table_id, const std::shared_ptr<FilterCondition> &cond);
 
 private:
     std::set<std::string> databases;

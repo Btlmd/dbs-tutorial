@@ -18,6 +18,8 @@
 #include <record/Field.h>
 #include <display/Result.h>
 #include <record/TableMeta.h>
+#include <node/ScanNode.h>
+
 
 std::shared_ptr<Result> DBSystem::CreateDatabase(const std::string &db_name) {
     if (databases.find(db_name) != databases.end()) {
@@ -435,5 +437,10 @@ std::shared_ptr<Result> DBSystem::DescribeTable(const std::string &table_name) {
                 fk_reference_fields
         ));
     }
+    return result;
+}
 
+
+std::shared_ptr<OpNode> DBSystem::GetTrivialScanNode(TableID table_id, const std::shared_ptr<FilterCondition> &cond) {
+    return std::make_shared<TrivialScanNode>(buffer, meta_map[table_id], cond, table_data_fd[table_id]);
 }

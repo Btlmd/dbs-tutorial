@@ -8,16 +8,19 @@
 #include <defines.h>
 #include <record/Record.h>
 
+#include <memory>
 #include <vector>
 
 class OpNode {
 public:
-    OpNode(std::vector<OpNode *> children);
+    std::vector<std::shared_ptr<OpNode>> children;
+
+    explicit OpNode(std::vector<std::shared_ptr<OpNode>> children) : children{std::move(children)} {}
+
     virtual ~OpNode() = default;
+
     virtual RecordList Next() = 0;
 };
-
-
 
 
 #endif //DBS_TUTORIAL_OPNODE_H
