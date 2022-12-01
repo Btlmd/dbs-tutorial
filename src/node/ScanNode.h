@@ -13,10 +13,11 @@
 
 class TrivialScanNode : public OpNode {
 public:
-    TrivialScanNode(BufferSystem &buffer, std::shared_ptr<const TableMeta> table_meta, std::shared_ptr<FilterCondition> condition,
+    TrivialScanNode(BufferSystem &buffer, std::shared_ptr<const TableMeta> table_meta,
+                    std::shared_ptr<FilterCondition> condition,
                     FileID page_file) : OpNode{{}}, buffer{buffer}, condition{std::move(condition)},
-                                                            current_page{-1},
-                                                            data_fd{page_file}, meta{std::move(table_meta)} {}
+                                        current_page{-1},
+                                        data_fd{page_file}, meta{std::move(table_meta)} {}
 
     RecordList Next() override {
         ++current_page;

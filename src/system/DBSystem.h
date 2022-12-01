@@ -52,16 +52,35 @@ public:
     std::shared_ptr<Result> DropPrimaryKey(const std::string &table_name, const std::string fk_name);
 
     /**
-     * Insert `record` into table
-     * Caller has to ensures that the record is legal
-     * @param table
-     * @param record
+     * Delete records satisfying `cond`
+     * @param table_id
+     * @param cond
+     * @return
      */
-    void Insert(TableID table, std::shared_ptr<Record> &record);
+    std::shared_ptr<Result> Delete(TableID table_id, const std::shared_ptr<FilterCondition> &cond);
 
-    std::shared_ptr<Result> Delete(const std::string &table_name);
+    /**
+     * Generate a `TrivialScanNode` from given table_id and filter condition
+     * @param table_id
+     * @param cond
+     * @return
+     */
+    std::shared_ptr<OpNode> GetTrivialScanNode(TableID table_id, const std::shared_ptr<FilterCondition> &cond);
 
-    std::shared_ptr<Result> Select(const std::string &table_name);
+    /**
+     * Select from execution tree
+     * @param plan
+     * @return
+     */
+    std::shared_ptr<Result> Select(std::vector<std::string> &header, std::shared_ptr<OpNode> &plan);
+
+    /**
+     * Insert records into `table_id`
+     * @param table_id
+     * @param records
+     * @return
+     */
+    std::shared_ptr<Result> Insert(TableID table_id, RecordList& records);
 
     /**
      * Validate that the record satisfies all constraints specified by `meta`
@@ -95,19 +114,11 @@ public:
     }
 
     /**
-     * Return the number of inserted records as a `Result`
-     * @return
-     */
-    std::shared_ptr<Result> InsertResult();
-
-    /**
      * Describe table query
      * @param table_name
      * @return
      */
     std::shared_ptr<Result> DescribeTable(const std::string &table_name);
-
-    std::shared_ptr<OpNode> GetTrivialScanNode(TableID table_id, const std::shared_ptr<FilterCondition> &cond);
 
 private:
     std::set<std::string> databases;
@@ -120,7 +131,6 @@ private:
     std::unordered_map<TableID, std::shared_ptr<TableMeta>> meta_map;
     boost::bimap<std::string, TableID> table_name_map;
     bool on_use{false};
-    std::size_t insert_record_counter{0};
 
     BufferSystem buffer;
 
@@ -174,6 +184,14 @@ private:
      * @return
      */
     std::shared_ptr<DataPage> FindPageWithSpace(TableID table_id, RecordSize size);
+
+    /**
+     * Insert `record` into table
+     * Caller has to ensures that the record is legal
+     * @param table
+     * @param record
+     */
+    void Insert(TableID table, std::shared_ptr<Record> &record);
 
 };
 

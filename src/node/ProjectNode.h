@@ -14,9 +14,18 @@ class ProjectNode: public OpNode {
 public:
     std::vector<FieldID> target;
     ProjectNode(std::shared_ptr<OpNode> downstream, std::vector<FieldID> target):
-        OpNode{{std::move(downstream)}}, target{std::move(target)} {}
+        OpNode{{std::move(downstream)}}, target{std::move(target)} {
+#ifdef DEBUG
+        // check for duplicates
+        std::vector<FieldID> check;
+        std::copy(this->target.cbegin(), this->target.cend(), std::back_inserter(check));
+        std::sort(check.begin(), check.end());
+        assert(std::adjacent_find(check.begin(), check.end()) == check.end());
+#endif
+    }
 
     RecordList Next() override {
+        // NOTE: `target` may contain duplicate entries
         RecordList downstream{children[0]->Next()};
         RecordList ret;
         for (const auto &record: downstream) {

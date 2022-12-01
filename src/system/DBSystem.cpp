@@ -444,3 +444,7 @@ std::shared_ptr<Result> DBSystem::DescribeTable(const std::string &table_name) {
 std::shared_ptr<OpNode> DBSystem::GetTrivialScanNode(TableID table_id, const std::shared_ptr<FilterCondition> &cond) {
     return std::make_shared<TrivialScanNode>(buffer, meta_map[table_id], cond, table_data_fd[table_id]);
 }
+
+std::shared_ptr<OpNode> DBSystem::GetDeleteNode(TableID table_id, const std::shared_ptr<FilterCondition> &cond) {
+
+}

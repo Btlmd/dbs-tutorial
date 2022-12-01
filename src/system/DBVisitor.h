@@ -13,7 +13,10 @@
 class DBVisitor : public SQLBaseVisitor {
 private:
     DBSystem &system;
+
     std::vector<TableID> selected_tables;
+
+    std::vector<std::shared_ptr<const TableMeta>> selected_table_metas;
 
     static std::shared_ptr<Cmp> ConvertOperator(SQLParser::Operator_Context *ctx);
 
@@ -63,6 +66,10 @@ public:
     antlrcpp::Any visitWhere_like_string(SQLParser::Where_like_stringContext *ctx) override;
 
     antlrcpp::Any visitColumn(SQLParser::ColumnContext *ctx) override;
+
+    antlrcpp::Any visitSelector(SQLParser::SelectorContext *ctx) override;
+
+    antlrcpp::Any visitAggregator(SQLParser::AggregatorContext *ctx) override;
 
 };
 

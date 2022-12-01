@@ -69,8 +69,9 @@ public:
 
 class TableMeta {
 public:
-
+    TableID table_id;
     PageID page_count;
+    std::string table_name;
     FieldMeteTable field_meta;
     std::shared_ptr<PrimaryKey> primary_key{nullptr};
     std::vector<std::shared_ptr<ForeignKey>> foreign_keys;
@@ -79,8 +80,10 @@ public:
 
     static std::shared_ptr<TableMeta> FromSrc(FileID fd, BufferSystem &buffer);
 
-    TableMeta(PageID page_count, FieldMeteTable field_meta, FileID fd, BufferSystem &buffer)
-            : fd{fd}, page_count{page_count}, field_meta{std::move(field_meta)}, buffer{buffer} {}
+    TableMeta(TableID table_id, std::string table_name, PageID page_count, FieldMeteTable field_meta, FileID fd,
+              BufferSystem &buffer)
+            : table_id{table_id}, table_name{std::move(table_name)}, fd{fd}, page_count{page_count},
+              field_meta{std::move(field_meta)}, buffer{buffer} {}
 
     ~TableMeta() {}
 
