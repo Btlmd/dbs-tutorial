@@ -21,10 +21,9 @@ typedef std::vector<std::shared_ptr<Record>> RecordList;
 
 class Record {
 public:
-    std::shared_ptr<NullBitmap> nulls;
     std::vector<std::shared_ptr<Field>> fields;
 
-    Record(std::shared_ptr<NullBitmap> nulls, std::vector<std::shared_ptr<Field>> fields);
+    Record(std::vector<std::shared_ptr<Field>> fields);
 
     /**
      * Build a record from source, using information from `meta`
@@ -58,11 +57,11 @@ public:
      */
     [[nodiscard]] std::vector<std::string> ToString() const {
         std::vector<std::string> buffer;
-        for (int i{0}; i < fields.size(); ++i) {
-            if (nulls->Get(i)) {
+        for (const auto &field: fields) {
+            if (field->is_null) {
                 buffer.emplace_back("NULL");
             } else {
-                buffer.emplace_back(fields[i]->ToString());
+                buffer.emplace_back(field->ToString());
             }
         }
         return std::move(buffer);

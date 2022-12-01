@@ -48,18 +48,16 @@ inline void write_string(uint8_t *&dst, const std::string& src) {
     dst += src.size();
 }
 
-//inline void read_string(uint8_t const *&src, std::string &dst) {
-//    // requires that `src` is null-terminated
-//    dst.assign(reinterpret_cast<const char *>(src));
-//    src += dst.size() + 1;
-//}
-//
-//inline void write_string(uint8_t *&dst, const std::string &src) {
-//    src.copy(reinterpret_cast<char *>(dst), src.size());
-//    // return value of `std::string::copy` never copies ending null
-//    dst += src.size();
-//    *dst = 0;
-//    dst += 1;
-//}
+inline void read_string_null_terminated(uint8_t const *src, std::string &dst) {
+    // requires that `src` is null-terminated
+    dst.assign(reinterpret_cast<const char *>(src));
+}
+
+inline void write_string_null_terminated(uint8_t *dst, const std::string &src) {
+    src.copy(reinterpret_cast<char *>(dst), src.size());
+    // return value of `std::string::copy` never copies ending null
+    dst += src.size();
+    *dst = 0;
+}
 
 #endif //DBS_TUTORIAL_UITLS_H

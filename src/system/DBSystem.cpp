@@ -172,7 +172,8 @@ DBSystem::CreateTable(const std::string &table_name, const std::vector<std::shar
     TableID table_id{NextTableID()};
 
     /**
-     * on creation, field IDs are continuous. however, after deleting fields, this is not guaranteed
+     * Refactored: field position and field id is just the same
+     * So field deletion should update all possible foreign keys in the database
      */
     auto meta{std::make_shared<TableMeta>(0, FieldMeteTable{field_meta}, table_meta_fd[table_id], buffer)};
 
@@ -333,8 +334,8 @@ std::shared_ptr<Result> DBSystem::InsertResult() {
 void DBSystem::CheckConstraint(const TableMeta &meta, const std::shared_ptr<Record> &record) const {
     // check not null
     for (int i{0}; i < meta.field_meta.Count(); ++i) {
-        if (record->nulls->Get(i) && meta.field_meta.field_seq[i]->not_null) {
-            throw OperationError{"Column `{}` cannot be null", meta.field_meta.field_seq[i]->name};
+        if (record->fields[i]->is_null && meta.field_meta.meta[i]->not_null) {
+            throw OperationError{"Column `{}` cannot be null", meta.field_meta.meta[i]->name};
         }
     }
 
@@ -364,13 +365,12 @@ void DBSystem::Insert(TableID table_id, std::shared_ptr<Record> &record) {
 std::shared_ptr<Result> DBSystem::DescribeTable(const std::string &table_name) {
     auto table_id{GetTableID(table_name)};
     auto table_meta{meta_map[table_id]};
-    auto &id_meta{table_meta->field_meta.id_meta};
 
     std::vector<std::string> header = {"Field", "Type", "Null", "Default"};
     std::vector<std::vector<std::string>> field_detail;
 
     // field meta
-    for (const auto &fm: table_meta->field_meta.field_seq) {
+    for (const auto &fm: table_meta->field_meta.meta) {
         std::string type_name{magic_enum::enum_name(fm->type)};
         if (fm->type == FieldType::CHAR || fm->type == FieldType::VARCHAR) {
             type_name += fmt::format("({})", fm->max_size);
@@ -389,7 +389,7 @@ std::shared_ptr<Result> DBSystem::DescribeTable(const std::string &table_name) {
     if (table_meta->primary_key != nullptr) {
         std::string pk_fields;
         for (int i{0}; i < table_meta->primary_key->field_count; ++i) {
-            pk_fields += id_meta[table_meta->primary_key->fields[i]]->name;
+            pk_fields += table_meta->field_meta.meta[table_meta->primary_key->fields[i]]->name;
             if (i != table_meta->primary_key->field_count - 1) {
                 pk_fields += ", ";
             }
@@ -399,7 +399,7 @@ std::shared_ptr<Result> DBSystem::DescribeTable(const std::string &table_name) {
 
     // unique constraints
     std::vector<std::string> unique_field_names;
-    for (const auto &fm: table_meta->field_meta.field_seq) {
+    for (const auto &fm: table_meta->field_meta.meta) {
         unique_field_names.push_back(fmt::format("UNIQUE ({});", fm->name));
     }
     std::sort(unique_field_names.begin(), unique_field_names.end());
@@ -410,7 +410,7 @@ std::shared_ptr<Result> DBSystem::DescribeTable(const std::string &table_name) {
     for (const auto &fk: table_meta->foreign_keys) {
         std::string fk_fields;
         for (int i{0}; i < fk->field_count; ++i) {
-            fk_fields += id_meta[fk->fields[i]]->name;
+            fk_fields += table_meta->field_meta.meta[fk->fields[i]]->name;
             if (i != fk->field_count - 1) {
                 fk_fields += ", ";
             }
@@ -419,10 +419,9 @@ std::shared_ptr<Result> DBSystem::DescribeTable(const std::string &table_name) {
         auto ref_name_iter{table_name_map.right.find(fk->reference_table)};
         assert(ref_name_iter != table_name_map.right.end());
         auto fk_reference_table_name{ref_name_iter->second};
-        auto &reference_id_name{meta_map[fk->reference_table]->field_meta.id_meta};
         std::string fk_reference_fields;
         for (int i{0}; i < fk->field_count; ++i) {
-            fk_reference_fields += reference_id_name[fk->reference_fields[i]]->name;
+            fk_reference_fields += table_meta->field_meta.meta[fk->reference_fields[i]]->name;
             if (i != fk->field_count - 1) {
                 fk_reference_fields += ", ";
             }

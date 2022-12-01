@@ -14,10 +14,9 @@ class OperationError : public std::runtime_error {
 public:
     template<typename... T>
     explicit OperationError(fmt::format_string<T...> fmt, T &&... args) :
-            std::runtime_error{"OperationError: " + fmt::format(fmt, args...)} {
+            std::runtime_error{fmt::format(fmt, args...)} {
         ErrorLog << std::runtime_error::what();
     }
 };
-
 
 #endif //DBS_TUTORIAL_OPERATIONEXCEPTION_H

@@ -21,29 +21,25 @@
 class FieldMeteTable {
 public:
     std::unordered_map<std::string, FieldID> name_id;
-    std::map<FieldID, std::shared_ptr<FieldMeta>> id_meta;
-//    std::vector<FieldID> field_seq;
-    std::vector<std::shared_ptr<FieldMeta>> field_seq;
+    std::vector<std::shared_ptr<FieldMeta>> meta;
 
     explicit FieldMeteTable(std::vector<std::shared_ptr<FieldMeta>> field_meta) {
-        for (const auto& fm: field_meta) {
+        for (const auto &fm: field_meta) {
             name_id.insert({fm->name, fm->field_id});
-            id_meta.insert({fm->field_id, fm});
         }
-        field_seq = std::move(field_meta);
+        meta = std::move(field_meta);
     }
 
     FieldMeteTable() = default;
 
     FieldID Count() const {
-        assert(name_id.size() == id_meta.size());
-        assert(name_id.size() == field_seq.size());
+        assert(name_id.size() == meta.size());
         return name_id.size();
     }
 
-    void Insert(const std::shared_ptr<FieldMeta>& fm) {
+    void Insert(const std::shared_ptr<FieldMeta> &fm) {
         name_id.insert({fm->name, fm->field_id});
-        id_meta.insert({fm->field_id, fm});
+        meta.push_back(fm);
     }
 
     FieldID ToID(const std::string &field_name) const noexcept {
@@ -61,6 +57,13 @@ public:
             throw E(fmt, args ...);
         }
         return fid;
+    }
+
+    template<typename E, typename... T>
+    const std::shared_ptr<FieldMeta> &
+    ToMeta(const std::string &field_name, fmt::format_string<T...> fmt, T &&... args) const {
+        auto fid{ToID<E>(field_name, fmt, args...)};
+        return meta[fid];
     }
 };
 

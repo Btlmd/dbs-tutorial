@@ -1,0 +1,242 @@
+//
+// Created by lambda on 22-11-30.
+//
+
+#ifndef DBS_TUTORIAL_WHERECONDITIONS_H
+#define DBS_TUTORIAL_WHERECONDITIONS_H
+
+#include <defines.h>
+#include <record/Field.h>
+#include <record/Record.h>
+
+#include <memory>
+#include <utility>
+#include <algorithm>
+#include <regex>
+
+#include <boost/algorithm/string.hpp>
+
+/**
+ * Algebraic Compare Operators
+ */
+class Cmp {
+public:
+    virtual bool operator()(const std::shared_ptr<Field> &lhs, const std::shared_ptr<Field> &rhs) const = 0;
+};
+
+typedef std::vector<std::shared_ptr<Cmp>> CmpList;
+
+class EqCmp : public Cmp {
+public:
+    bool operator()(const std::shared_ptr<Field> &lhs, const std::shared_ptr<Field> &rhs) const override {
+        return *lhs == *rhs;
+    }
+};
+
+class LeCmp : public Cmp {
+public:
+    bool operator()(const std::shared_ptr<Field> &lhs, const std::shared_ptr<Field> &rhs) const override {
+        return *lhs < *rhs;
+    }
+};
+
+class GeCmp : public Cmp {
+public:
+    bool operator()(const std::shared_ptr<Field> &lhs, const std::shared_ptr<Field> &rhs) const override {
+        return *lhs > *rhs;
+    }
+};
+
+class LeqCmp : public Cmp {
+public:
+    bool operator()(const std::shared_ptr<Field> &lhs, const std::shared_ptr<Field> &rhs) const override {
+        return *lhs <= *rhs;
+    }
+};
+
+class GeqCmp : public Cmp {
+public:
+    bool operator()(const std::shared_ptr<Field> &lhs, const std::shared_ptr<Field> &rhs) const override {
+        return *lhs >= *rhs;
+    }
+};
+
+class NeqCmp : public Cmp {
+public:
+    bool operator()(const std::shared_ptr<Field> &lhs, const std::shared_ptr<Field> &rhs) const override {
+        return *lhs != *rhs;
+    }
+};
+
+enum class ConditionType {
+    FILTER = 0,
+    JOIN = 1
+};
+
+/**
+ * Represent any condition in a where clause
+ */
+class Condition {
+public:
+    ConditionType type;
+
+    explicit Condition(ConditionType type) : type{type} {}
+};
+
+/**
+ * Record Filter Condition
+ */
+class FilterCondition : public Condition {
+public:
+    TableID table_id;
+
+    explicit FilterCondition(TableID table_id) : Condition{ConditionType::FILTER}, table_id{table_id} {}
+
+    virtual bool operator()(const std::shared_ptr<Record> &record) const = 0;
+
+    virtual ~FilterCondition() = default;
+};
+
+typedef std::vector<std::shared_ptr<FilterCondition>> FilterConditionList;
+
+/**
+ * Compare field with a given value
+ */
+class ValueCompareCondition : public FilterCondition {
+public:
+    const std::shared_ptr<Field> rhs;
+    const FieldID field_position;
+    const std::shared_ptr<Cmp> comparer;
+
+    ValueCompareCondition(std::shared_ptr<Field> rhs, TableID table_id, FieldID pos, std::shared_ptr<Cmp> &cmp) :
+            FilterCondition{table_id}, rhs{std::move(rhs)}, field_position{pos}, comparer{std::move(cmp)} {}
+
+    bool operator()(const std::shared_ptr<Record> &record) const override {
+        return (*comparer)(record->fields[field_position], rhs);
+    }
+};
+
+/**
+ * Check whether the field value match any of the given list of values
+ */
+class ValueInListCondition : public FilterCondition {
+public:
+    const std::vector<std::shared_ptr<Field>> value_list;
+    const FieldID field_position;
+
+    ValueInListCondition(std::vector<std::shared_ptr<Field>> value_list, TableID table_id, FieldID pos) :
+            FilterCondition{table_id}, value_list{std::move(value_list)}, field_position{pos} {}
+
+    bool operator()(const std::shared_ptr<Record> &record) const override {
+        EqCmp comparer;
+        const auto &record_field{record->fields[field_position]};
+        return std::ranges::any_of(value_list.cbegin(), value_list.cend(),
+                                   [&record_field, &comparer](const auto &f) { return comparer(record_field, f); });
+    }
+};
+
+/**
+ * Compare two fields in a record
+ */
+class FieldCmpCondition : public FilterCondition {
+public:
+    const FieldID lhs_pos;
+    const FieldID rhs_pos;
+    const std::shared_ptr<Cmp> comparer;
+
+    FieldCmpCondition(TableID table_id, FieldID lhs_pos, FieldID rhs_pos, std::shared_ptr<Cmp> cmp) :
+            FilterCondition{table_id}, lhs_pos{lhs_pos}, rhs_pos{rhs_pos}, comparer{std::move(cmp)} {}
+
+    bool operator()(const std::shared_ptr<Record> &record) const override {
+        return (*comparer)(record->fields[lhs_pos], record->fields[rhs_pos]);
+    }
+};
+
+class NullCompCondition : public FilterCondition {
+public:
+    const bool filter_not_null;  // when true, filter not null records
+    const FieldID field_position;
+
+    NullCompCondition(TableID table_id, FieldID pos, bool filter_not_null) :
+            FilterCondition{table_id}, field_position{pos}, filter_not_null{filter_not_null} {}
+
+    bool operator()(const std::shared_ptr<Record> &record) const override {
+        return filter_not_null ^ record->fields[field_position]->is_null;
+    }
+};
+
+class LikeCondition : public FilterCondition {
+public:
+    std::regex pattern;
+    const FieldID field_position;
+
+    LikeCondition(const std::string &sql_pattern, TableID table_id, FieldID pos) : FilterCondition{table_id},
+                                                                                   field_position{pos} {
+        /**
+         * Escape the user input
+         * Reference: https://stackoverflow.com/questions/40195412/c11-regex-search-for-exact-string-escape
+         * TODO: is this escape correct?
+         */
+        std::regex special_char{R"([-[\]{}()*+?.,\^$|#\s])"};
+        std::string input_pattern{std::regex_replace(sql_pattern, special_char, R"(\$&)")};
+
+        boost::replace_all(input_pattern, "%", ".*");
+        boost::replace_all(input_pattern, "_", ".");
+        input_pattern = "^" + input_pattern + "$";
+
+        TraceLog << "LikeCondition constructed as " << input_pattern;
+
+        pattern = input_pattern;
+    }
+
+    bool operator()(const std::shared_ptr<Record> &record) const override {
+        auto string_field{std::dynamic_pointer_cast<String>(record->fields[field_position])};
+        return std::regex_match(string_field->data, pattern);
+    }
+};
+
+/**
+ * Apply a series of conjunct filter conditions on the record
+ */
+class AndCondition : public FilterCondition {
+public:
+    const FilterConditionList conditions;
+
+    explicit AndCondition(FilterConditionList conditions, TableID table_id) :
+            FilterCondition{table_id}, conditions{std::move(conditions)} {
+        assert(std::ranges::all_of(this->conditions.begin(), this->conditions.end(),
+                                   [table_id](const auto &cond) { return cond->table_id == table_id; }));
+    }
+
+    bool operator()(const std::shared_ptr<Record> &record) const override {
+        return std::ranges::all_of(conditions.begin(), conditions.end(),
+                                   [&record](const auto &cond) { return (*cond)(record); });
+    }
+};
+
+typedef std::tuple<FieldID, FieldID, std::shared_ptr<Cmp>> JoinCond;
+
+/**
+ * Record Join Condition, with conjunct comparers (since disjunction is not yet supported in the grammar)
+ */
+class JoinCondition : public Condition {
+public:
+    std::vector<JoinCond> conditions;
+
+    explicit JoinCondition(std::vector<JoinCond> conditions) : Condition{ConditionType::JOIN},
+                                                               conditions{std::move(conditions)} {}
+
+    bool operator()(std::shared_ptr<Record> &lhs, std::shared_ptr<Record> &rhs) const {
+        return std::ranges::all_of(conditions.begin(), conditions.end(), [&lhs, &rhs](const auto &cond) {
+            return (*std::get<2>(cond))(lhs->fields[std::get<0>(cond)], rhs->fields[std::get<1>(cond)]);
+        });
+    }
+};
+
+template<typename T, typename... Args>
+inline std::shared_ptr<Condition>
+make_cond(Args &&... args) {
+    return std::static_pointer_cast<Condition>(std::make_shared<T>(std::forward<Args>(args)...));
+}
+
+#endif //DBS_TUTORIAL_WHERECONDITIONS_H

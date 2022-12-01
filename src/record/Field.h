@@ -12,12 +12,14 @@
 
 #include <defines.h>
 #include <utils/Serialization.h>
+#include <exception/OperationException.h>
 
 enum class FieldType {
-    INT = 0,
-    FLOAT = 1,
-    CHAR = 2,
-    VARCHAR = 3,
+    INVALID = 0,
+    INT = 1,
+    FLOAT = 2,
+    CHAR = 3,
+    VARCHAR = 4,
 };
 
 class PrimaryKey {
@@ -41,7 +43,7 @@ public:
     FieldType type;
     bool is_null;
 
-    Field(FieldType type) : type{type} {}
+    explicit Field(FieldType type, bool is_null = false) : type{type}, is_null{is_null} {}
 
     Field() = default;
 
@@ -51,7 +53,7 @@ public:
      * Return the size of the field in storage
      * @return
      */
-    [[nodiscard]] virtual std::size_t Size() const = 0;
+    [[nodiscard]] virtual RecordSize Size() const = 0;
 
     /**
      * Dump the field into `dst` and move `dst` forward
@@ -64,47 +66,31 @@ public:
 
     virtual std::partial_ordering operator<=>(const Field &rhs) const = 0;
 
+    virtual bool operator==(const Field &rhs) const = 0;
+
+    /**
+     * Generate a field from a specific source
+     * @param type
+     * @param src
+     * @param max_len
+     * @return
+     */
     static std::shared_ptr<Field> LoadField(FieldType type, const uint8_t *&src, RecordSize max_len = -1);
-};
 
-class Int : public Field {
-public:
-    int value;
-
-    Int(int value) : Field{FieldType::INT}, value{value} {}
-
-    static std::shared_ptr<Int> FromSrc(const uint8_t *&src) {
-        int value;
-        read_var(src, value);
-        return std::make_shared<Int>(value);
-    }
-
-    std::partial_ordering operator<=>(const Field &rhs) const override {
-        if (is_null || rhs.is_null) {
-            return std::partial_ordering::unordered;
-        }
-        auto int_rhs{dynamic_cast<const Int &>(rhs)};
-        return value <=> int_rhs.value;
-    }
-
-    [[nodiscard]] std::size_t Size() const override {
-        return sizeof(value);
-    }
-
-    [[nodiscard]] std::string ToString() const override {
-        return std::to_string(value);
-    }
-
-    void Write(uint8_t *&dst) const override {
-        write_var(dst, value);
-    }
+    /**
+     * Generate a NULL field for a specific type
+     * @param type
+     * @param max_len
+     * @return
+     */
+    static std::shared_ptr<Field> MakeNull(FieldType type, RecordSize max_len = -1);
 };
 
 class Float : public Field {
 public:
     float value;
 
-    Float(float value) : Field{FieldType::FLOAT}, value{value} {}
+    explicit Float(float value) : Field{FieldType::FLOAT}, value{value} {}
 
     static std::shared_ptr<Float> FromSrc(const uint8_t *&src) {
         float value;
@@ -120,7 +106,15 @@ public:
         return value <=> float_rhs.value;
     }
 
-    [[nodiscard]] std::size_t Size() const override {
+    bool operator==(const Field &rhs) const override {
+        if (is_null || rhs.is_null) {
+            return false;
+        }
+        auto float_rhs{dynamic_cast<const Float &>(rhs)};
+        return value == float_rhs.value;
+    }
+
+    [[nodiscard]] RecordSize Size() const override {
         return sizeof(value);
     }
 
@@ -135,101 +129,136 @@ public:
 private:
 };
 
-class Char : public Field {
+class Int : public Field {
 public:
-    char *data;  // terminated with null
-    RecordSize max_len;
+    int value;
 
-    Char(RecordSize max_len) : data{new char[max_len + 1]} {}
+    explicit Int(int value) : Field{FieldType::INT}, value{value} {}
 
-    ~Char() {
-        delete[] data;
-    }
-
-    static std::shared_ptr<Char> FromSrc(const uint8_t *&src, RecordSize max_len) {
-        auto ret{std::make_shared<Char>(max_len)};
-        read_var(src, ret->data, max_len + 1);
-        return ret;
+    static std::shared_ptr<Int> FromSrc(const uint8_t *&src) {
+        int value;
+        read_var(src, value);
+        return std::make_shared<Int>(value);
     }
 
     std::partial_ordering operator<=>(const Field &rhs) const override {
         if (is_null || rhs.is_null) {
             return std::partial_ordering::unordered;
         }
-        auto cmp{strcmp(data, dynamic_cast<const Char &>(rhs).data)};
-        if (cmp > 0) {
-            return std::partial_ordering::less;
-        }
-        if (cmp < 0) {
-            return std::partial_ordering::greater;
-        }
-        return std::partial_ordering::equivalent;
+        auto int_rhs{dynamic_cast<const Int &>(rhs)};
+        return value <=> int_rhs.value;
     }
 
-    [[nodiscard]] std::size_t Size() const override {
+    bool operator==(const Field &rhs) const override {
+        if (is_null || rhs.is_null) {
+            return false;
+        }
+        auto int_rhs{dynamic_cast<const Int &>(rhs)};
+        return value == int_rhs.value;
+    }
+
+    [[nodiscard]] RecordSize Size() const override {
+        return sizeof(value);
+    }
+
+    [[nodiscard]] std::string ToString() const override {
+        return std::to_string(value);
+    }
+
+    void Write(uint8_t *&dst) const override {
+        write_var(dst, value);
+    }
+
+    std::shared_ptr<Float> ToFloat() const {
+        return std::make_shared<Float>(value);
+    }
+};
+
+class String: public Field {
+public:
+    std::string data;
+
+    explicit String(std::string str_data): data{std::move(str_data)}, Field{FieldType::INVALID} {}
+
+    explicit String(std::string str_data, FieldType field_type): data{std::move(str_data)}, Field{field_type} {}
+
+    std::partial_ordering operator<=>(const Field &rhs) const override {
+        if (is_null || rhs.is_null) {
+            return std::partial_ordering::unordered;
+        }
+        auto str_rhs{dynamic_cast<const String *>(&rhs)};
+        return data <=> str_rhs->data;
+    }
+
+    bool operator==(const Field &rhs) const override {
+        if (is_null || rhs.is_null) {
+            return false;
+        }
+        auto str_rhs{dynamic_cast<const String *>(&rhs)};
+        return data == str_rhs->data;
+    }
+
+    [[nodiscard]] std::string ToString() const override {
+        return {data};
+    }
+
+    ~String() = default;
+};
+
+class Char : public String {
+public:
+    RecordSize max_len;
+
+    /**
+     * Caller should ensure that the data is valid, i.e. data.size() <= max_size
+     * @param str_data
+     */
+    Char(std::string str_data, RecordSize max_len) : String{std::move(str_data), FieldType::CHAR}, max_len{max_len} {}
+
+    ~Char() = default;
+
+    static std::shared_ptr<Char> FromSrc(const uint8_t *&src, RecordSize max_len) {
+        std::string buffer;
+        read_string_null_terminated(src, buffer);
+        assert(buffer.size() < max_len);
+        src += max_len + 1;
+        return std::make_shared<Char>(std::move(buffer), max_len);
+    }
+
+    [[nodiscard]] RecordSize Size() const override {
         return max_len + 1;
     }
 
     void Write(uint8_t *&dst) const override {
-        write_var(dst, data, max_len + 1);
-    }
-
-    [[nodiscard]] std::string ToString() const override {
-        return {data};
+        write_string_null_terminated(dst, data);
+        dst += max_len + 1;
     }
 };
 
-class VarChar : public Field {
+class VarChar : public String {
 public:
-    char *data;  // terminated with null
-    RecordSize str_len;
-
     VarChar() = default;
 
-    VarChar(const std::string &stream) {
-        str_len = stream.size();
-        data = new char[str_len + 1];
-        stream.copy(data, str_len, 0);
-    }
+    /**
+     * Caller should ensure that the data is valid, i.e. data.size() <= max_size
+     * @param str_data
+     */
+    explicit VarChar(std::string str_data): String{std::move(str_data), FieldType::VARCHAR} {}
 
-    ~VarChar() {
-        delete[] data;
-    }
+    ~VarChar() = default;
 
     static std::shared_ptr<VarChar> FromSrc(const uint8_t *&src) {
-        auto ret{std::make_shared<VarChar>()};
-        read_var(src, ret->str_len);
-        ret->data = new char[ret->str_len + 1];
-        read_var(src, ret->data, ret->str_len);
-        ret->data[ret->str_len] = 0;
-        return ret;
+        std::string buffer;
+        read_string(src, buffer);
+        return std::make_shared<VarChar>(std::move(buffer));
     }
 
-    std::partial_ordering operator<=>(const Field &rhs) const override {
-        if (is_null || rhs.is_null) {
-            return std::partial_ordering::unordered;
-        }
-        auto cmp{strcmp(data, dynamic_cast<const VarChar &>(rhs).data)};
-        if (cmp > 0) {
-            return std::partial_ordering::less;
-        }
-        if (cmp < 0) {
-            return std::partial_ordering::greater;
-        }
-        return std::partial_ordering::equivalent;
-    }
-
-    [[nodiscard]] std::size_t Size() const override {
-        return str_len + sizeof(str_len);
+    [[nodiscard]] RecordSize Size() const override {
+        return data.size() + sizeof(RecordSize);
     }
 
     void Write(uint8_t *&dst) const override {
-        write_var(dst, str_len);
-        write_var(dst, data, str_len);
-    }
-
-    [[nodiscard]] std::string ToString() const override {
-        return {data};
+        write_string(dst, data);
     }
 };
 
@@ -245,7 +274,7 @@ public:
     bool has_default{false};
     std::shared_ptr<Field> default_value{nullptr};
 
-    [[nodiscard]] std::size_t Size() const {
+    [[nodiscard]] RecordSize Size() const {
         return sizeof(FieldMeta) - sizeof(std::string) + sizeof(std::size_t) + name.size();
     }
 
@@ -291,6 +320,35 @@ inline std::shared_ptr<Field> Field::LoadField(FieldType type, const uint8_t *&s
             return Char::FromSrc(src, max_len);
         case FieldType::VARCHAR:
             return VarChar::FromSrc(src);
+        default:
+            assert(false);
+    }
+}
+
+inline std::shared_ptr<Field> Field::MakeNull(FieldType type, RecordSize max_len) {
+    switch (type) {
+        case FieldType::INT:{
+            auto int_p{std::make_shared<Int>(0)};
+            int_p->is_null = true;
+            return int_p;
+        }
+        case FieldType::FLOAT:{
+            auto float_p{std::make_shared<Float>(0)};
+            float_p->is_null = true;
+            return float_p;
+        }
+        case FieldType::CHAR:{
+            auto char_p{std::make_shared<Char>("", max_len)};
+            char_p->is_null = true;
+            return char_p;
+        }
+        case FieldType::VARCHAR:{
+            auto varchar_p{std::make_shared<VarChar>("")};
+            varchar_p->is_null = true;
+            return varchar_p;
+        }
+        default:
+            assert(false);
     }
 }
 

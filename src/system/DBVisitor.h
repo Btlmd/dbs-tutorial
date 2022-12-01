@@ -5,13 +5,23 @@
 #ifndef DBS_TUTORIAL_DBVISITOR_H
 #define DBS_TUTORIAL_DBVISITOR_H
 
-#include "grammar/SQLBaseVisitor.h"
-#include "DBSystem.h"
+#include <grammar/SQLBaseVisitor.h>
+#include <system/DBSystem.h>
+#include <system/WhereConditions.h>
+
 
 class DBVisitor : public SQLBaseVisitor {
-public:
+private:
     DBSystem &system;
+    std::set<TableID> selected_tables;
 
+    static std::shared_ptr<Cmp> ConvertOperator(SQLParser::Operator_Context *ctx);
+
+    static std::shared_ptr<Field> GetValue(SQLParser::ValueContext *ctx, const std::shared_ptr<FieldMeta> &selected_field, bool ignore_max_size = false);
+
+
+
+public:
     explicit DBVisitor(DBSystem &system_mgr) : system{system_mgr} {}
 
     antlrcpp::Any visitUse_db(SQLParser::Use_dbContext *ctx) override;
@@ -32,9 +42,30 @@ public:
 
     antlrcpp::Any visitField_list(SQLParser::Field_listContext *ctx) override;
 
-    antlrcpp::Any visitInsert_into_table(SQLParser::Insert_into_tableContext *context) override;
+    antlrcpp::Any visitInsert_into_table(SQLParser::Insert_into_tableContext *ctx) override;
 
-    antlrcpp::Any visitDescribe_table(SQLParser::Describe_tableContext *context) override;
+    antlrcpp::Any visitDescribe_table(SQLParser::Describe_tableContext *ctx) override;
+
+    antlrcpp::Any visitSelect_table_(SQLParser::Select_table_Context *ctx) override;
+
+    antlrcpp::Any visitSelect_table(SQLParser::Select_tableContext *ctx) override;
+
+    antlrcpp::Any visitWhere_and_clause(SQLParser::Where_and_clauseContext *ctx) override;
+
+    antlrcpp::Any visitWhere_operator_expression(SQLParser::Where_operator_expressionContext *ctx) override;
+
+    antlrcpp::Any visitWhere_operator_select(SQLParser::Where_operator_selectContext *ctx) override;
+
+    antlrcpp::Any visitWhere_null(SQLParser::Where_nullContext *ctx) override;
+
+    antlrcpp::Any visitWhere_in_list(SQLParser::Where_in_listContext *ctx) override;
+
+    antlrcpp::Any visitWhere_in_select(SQLParser::Where_in_selectContext *ctx) override;
+
+    antlrcpp::Any visitWhere_like_string(SQLParser::Where_like_stringContext *ctx) override;
+
+    antlrcpp::Any visitColumn(SQLParser::ColumnContext *ctx) override;
+
 
 };
 
