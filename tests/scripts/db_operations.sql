@@ -4,12 +4,27 @@ SHOW DATABASES;
 USE test_db0;
 
 CREATE TABLE t0(
-     int_f0 INT,
-     int_f1 INT,
-     vc_f VARCHAR(20) NOT NULL,
-     float_f FLOAT,
+     a INT,
+     b INT,
+     c VARCHAR(20) NOT NULL,
+     d FLOAT DEFAULT -1.1,
 
-     PRIMARY KEY pk_name (int_f0, int_f1)
+     PRIMARY KEY pk_name (a, b)
 );
 
+
+SELECT * FROM t0;
+
 INSERT INTO t0 VALUES (1, 2, 'TEST_CHARS', 2.71828);
+
+SELECT * FROM t0;
+
+INSERT INTO t0 VALUES (3, 4, 'whatever', 3.1415926);
+
+SELECT * FROM t0;
+
+INSERT INTO t0 VALUES (3, 6, 'whatever2', 3.1415926);
+
+SELECT * FROM t0;
+
+SELECT * FROM t0 WHERE t0.c LIKE '%w_a_e%';

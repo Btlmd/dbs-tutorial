@@ -21,7 +21,7 @@ void DataPage::Contiguous() {
     page->SetDirty();
 }
 
-std::shared_ptr<Record> DataPage::GetRecord(SlotID slot) const {
+std::shared_ptr<Record> DataPage::Select(SlotID slot) const {
     auto offset{*FooterSlot(slot)};  // offset of a slot, from the very beginning of the page
     if (offset < 0) {  // invalid slot
         return nullptr;

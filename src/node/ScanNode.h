@@ -21,14 +21,14 @@ public:
 
     RecordList Next() override {
         ++current_page;
-        if (current_page == meta->page_count) {
+        if (current_page == meta->data_page_count) {
             return {};
         }
         auto page = buffer.ReadPage(data_fd, current_page);
         DataPage dp{page, *meta};
         RecordList ret;
         for (FieldID i{0}; i < dp.header.slot_count; ++i) {
-            auto record{dp.GetRecord(i)};
+            auto record{dp.Select(i)};
             if (record != nullptr && (condition == nullptr || (*condition)(record))) {
                 ret.push_back(record);
             }

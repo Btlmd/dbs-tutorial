@@ -46,7 +46,7 @@ public:
      * @return
      */
     RecordSize Size() {
-        RecordSize size{0};
+        auto size{static_cast<RecordSize>((fields.size() + 7) / 8)};  // offset of null bitmap
         for (const auto &f: fields) {
             size += f->Size();
         }
@@ -75,7 +75,7 @@ public:
      * @return
      */
     [[nodiscard]] std::string Repr() const {
-        return boost::algorithm::join(ToString(), ", ");
+        return "(" + boost::algorithm::join(ToString(), ", ") + ")";
     }
 };
 

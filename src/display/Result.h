@@ -37,11 +37,11 @@ public:
 
     typedef std::vector<variant<std::string, const char *, tabulate::Table>> Row;
 
-    static Row MoveToRow(std::vector<std::string> &&los);
+    static Row ToRow(std::vector<std::string> los);
 
     std::vector<std::string> headers;
     std::vector<std::vector<std::string>> records;
-    tabulate::Table *table;
+    std::shared_ptr<tabulate::Table> table;
 };
 
 class TextResult : public Result {

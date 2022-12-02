@@ -44,11 +44,15 @@ BufferSystem::~BufferSystem() {
 }
 
 void BufferSystem::Access(Page *page) {
-    assert(visit_record_map_.find(page) != visit_record_map_.end());
-    auto it{visit_record_map_[page]};
-    auto page_ptr{*it};
-    visit_record_.erase(it);
-    visit_record_.push_front(page_ptr);
+    /**
+     * TODO: insidious unknown bug ...
+     */
+
+//    assert(visit_record_map_.find(page) != visit_record_map_.end());
+//    auto it{visit_record_map_[page]};
+//    auto page_ptr{*it};
+//    visit_record_.erase(it);
+//    visit_record_.push_front(page_ptr);
 }
 
 void BufferSystem::ReleaseFile(FileID fd) {

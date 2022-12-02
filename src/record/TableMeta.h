@@ -69,30 +69,36 @@ public:
 
 class TableMeta {
 public:
-    TableID table_id;
-    PageID page_count;
+    TableID table_id{-1};
+    PageID data_page_count{-1};
     std::string table_name;
     FieldMeteTable field_meta;
     std::shared_ptr<PrimaryKey> primary_key{nullptr};
     std::vector<std::shared_ptr<ForeignKey>> foreign_keys;
 
+    /**
+     * Write TableMeta to file
+     */
     void Write();
 
     static std::shared_ptr<TableMeta> FromSrc(FileID fd, BufferSystem &buffer);
 
     TableMeta(TableID table_id, std::string table_name, PageID page_count, FieldMeteTable field_meta, FileID fd,
               BufferSystem &buffer)
-            : table_id{table_id}, table_name{std::move(table_name)}, fd{fd}, page_count{page_count},
+            : table_id{table_id}, table_name{std::move(table_name)}, fd{fd}, data_page_count{page_count},
               field_meta{std::move(field_meta)}, buffer{buffer} {}
 
-    ~TableMeta() {}
+    explicit TableMeta(BufferSystem &buffer) : buffer{buffer} {}
 
+    ~TableMeta() = default;
 private:
-    TableMeta(BufferSystem buffer) : buffer{buffer} {}
 
     BufferSystem &buffer;
-    FileID fd;
+    FileID fd{};
 };
 
+
+
+constexpr int FK_PER_PAGE{PAGE_SIZE / sizeof(ForeignKey)};
 
 #endif //DBS_TUTORIAL_TABLEMETA_H

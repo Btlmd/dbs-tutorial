@@ -33,7 +33,7 @@
 #include <defines.h>
 #include <grammar/SQLLexer.h>
 #include <grammar/SQLParser.h>
-#include "system/DBVisitor.h"
+#include <system/DBVisitor.h>
 #include <system/DBSystem.h>
 #include <exception/OperationException.h>
 
@@ -136,6 +136,7 @@ int main() {
                 continue;
             }
             process_input(buffer, visitor);
+            std::cout << std::endl;
             buffer.clear();
         }
 #ifdef DEBUG

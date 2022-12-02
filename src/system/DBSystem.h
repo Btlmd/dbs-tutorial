@@ -49,7 +49,7 @@ public:
 
     std::shared_ptr<Result> DropForeignKey(const std::string &table_name, const std::string fk_name);
 
-    std::shared_ptr<Result> DropPrimaryKey(const std::string &table_name, const std::string fk_name);
+    std::shared_ptr<Result> DropPrimaryKey(const std::string &table_name);
 
     /**
      * Delete records satisfying `cond`
@@ -72,7 +72,7 @@ public:
      * @param plan
      * @return
      */
-    std::shared_ptr<Result> Select(std::vector<std::string> &header, std::shared_ptr<OpNode> &plan);
+    std::shared_ptr<Result> Select(const std::vector<std::string> &header, const std::shared_ptr<OpNode> &plan);
 
     /**
      * Insert records into `table_id`
@@ -106,6 +106,7 @@ public:
      * @return
      */
     TableID GetTableID(const std::string &table_name) const {
+        CheckOnUse();
         auto iter{table_name_map.left.find(table_name)};
         if (iter == table_name_map.left.end()) {
             throw OperationError{"Table `{}` does not exist", table_name};
@@ -127,7 +128,6 @@ private:
     FileID table_info_fd{-1};
     std::unordered_map<TableID, FileID> table_data_fd;
     std::unordered_map<TableID, FileID> table_meta_fd;
-    std::unordered_map<TableID, FileID> table_index_fd;
     std::unordered_map<TableID, std::shared_ptr<TableMeta>> meta_map;
     boost::bimap<std::string, TableID> table_name_map;
     bool on_use{false};
@@ -186,12 +186,9 @@ private:
     std::shared_ptr<DataPage> FindPageWithSpace(TableID table_id, RecordSize size);
 
     /**
-     * Insert `record` into table
-     * Caller has to ensures that the record is legal
-     * @param table
-     * @param record
+     * Throw exception if no database is selected
      */
-    void Insert(TableID table, std::shared_ptr<Record> &record);
+    void CheckOnUse() const;
 
 };
 

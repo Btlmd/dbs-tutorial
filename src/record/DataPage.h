@@ -39,7 +39,7 @@ public:
     explicit DataPage(Page *page, const TableMeta &table_meta) : header{*reinterpret_cast<PageHeader *>(page->data)},
                                                            page{page}, meta{table_meta} {}
 
-    [[nodiscard]] std::shared_ptr<Record> GetRecord(SlotID slot) const;
+    [[nodiscard]] std::shared_ptr<Record> Select(SlotID slot) const;
 
     /**
      * Insert record into the end of page

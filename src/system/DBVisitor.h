@@ -16,11 +16,13 @@ private:
 
     std::vector<TableID> selected_tables;
 
-    std::vector<std::shared_ptr<const TableMeta>> selected_table_metas;
+    bool return_conditions;
 
     static std::shared_ptr<Cmp> ConvertOperator(SQLParser::Operator_Context *ctx);
 
     static std::shared_ptr<Field> GetValue(SQLParser::ValueContext *ctx, const std::shared_ptr<FieldMeta> &selected_field, bool ignore_max_size = false);
+
+    static void strip_quote(std::string &possibly_quoted);
 
 public:
     explicit DBVisitor(DBSystem &system_mgr) : system{system_mgr} {}
@@ -69,7 +71,7 @@ public:
 
     antlrcpp::Any visitSelector(SQLParser::SelectorContext *ctx) override;
 
-    antlrcpp::Any visitAggregator(SQLParser::AggregatorContext *ctx) override;
+    antlrcpp::Any visitDelete_from_table(SQLParser::Delete_from_tableContext *ctx) override;
 
 };
 

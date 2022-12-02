@@ -199,7 +199,11 @@ public:
     }
 
     [[nodiscard]] std::string ToString() const override {
-        return {data};
+        return '\'' + data + '\'';
+    }
+
+    [[nodiscard]] std::string Raw() const {
+        return data;
     }
 
     ~String() = default;
@@ -278,9 +282,9 @@ public:
         return sizeof(FieldMeta) - sizeof(std::string) + sizeof(std::size_t) + name.size();
     }
 
-    static FieldMeta *FromSrc(const uint8_t *&src) {
+    static std::shared_ptr<FieldMeta> FromSrc(const uint8_t *&src) {
         const uint8_t *start_point{src};  // be optimized ifndef DEBUG
-        auto meta{new FieldMeta};
+        auto meta{std::make_shared<FieldMeta>()};
         read_var(src, meta->type);
         read_string(src, meta->name);
         read_var(src, meta->max_size);

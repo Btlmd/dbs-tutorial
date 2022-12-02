@@ -120,8 +120,8 @@ antlrcpp::Any DBVisitor::visitCreate_table(SQLParser::Create_tableContext *ctx) 
 
                     .max_size{max_size},
                     .unique{false},
-                    .not_null{not_null == nullptr},
-                    .has_default{default_value == nullptr},
+                    .not_null{not_null != nullptr},
+                    .has_default{default_value != nullptr},
                     .default_value{default_value},
             }));
             continue;
@@ -234,11 +234,106 @@ antlrcpp::Any DBVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) 
         auto table_id{system.GetTableID(ident_ctx->getText())};
         selected_tables.push_back(table_id);
     }
+    return_conditions = false;
 
-    // generate scan and join nodes
-    auto table_tree_any{ctx->where_and_clause()->accept(this)};
-    auto &[table_seq, table_offset, root]{
-            table_tree_any.as<std::tuple<std::vector<TableID>, std::vector<FieldID>, std::shared_ptr<OpNode>>>()};
+    std::multimap<TableID, std::shared_ptr<FilterCondition>> filters;
+    std::multimap<JoinPair, std::shared_ptr<JoinCondition>> joins;
+
+    // get conditions
+    if (ctx->where_and_clause()) {
+        auto table_tree_any{ctx->where_and_clause()->accept(this)};
+        auto [where_filters, where_joins]{
+                table_tree_any.as<std::pair<std::multimap<TableID, std::shared_ptr<FilterCondition>>, std::multimap<JoinPair, std::shared_ptr<JoinCondition>>>>()};
+        filters = where_filters;
+        joins = where_joins;
+    }
+
+    // construct plan tree
+    std::map<TableID, std::shared_ptr<OpNode>> table_scanners;
+    std::shared_ptr<OpNode> root;
+
+    // construct table scan nodes
+    for (const auto &table_id: selected_tables) {
+        std::shared_ptr<AndCondition> and_cond{nullptr};
+        if (filters.count(table_id) > 0) {  // only add `AndCondition` where there is at least one condition
+            and_cond = std::make_shared<AndCondition>(FilterConditionList{}, table_id);
+            for (auto [i, end]{filters.equal_range(table_id)}; i != end; ++i) {
+                and_cond->AddCondition(i->second);
+            }
+        }
+        table_scanners.insert({table_id, system.GetTrivialScanNode(table_id, and_cond)});
+
+        // TODO: [c7w] add index scan node when applicable
+    }
+
+    // join tables
+    std::vector<TableID> table_seq{selected_tables[0]};
+    std::vector<FieldID> table_offset{0};
+    if (selected_tables.size() > 1) {  // construct join nodes
+        // BFS to determine join order
+        FieldID ptr{0};  // to the last element
+        auto pop = [&]() {
+            auto curr{table_seq[ptr]};
+            ++ptr;
+            return curr;
+        };
+        auto empty = [&]() { return ptr == table_seq.size(); };
+
+        while (!empty()) {
+            auto table_id{pop()};
+            // well. brute force ... :(
+            // but who would join many tables ... :)
+            // O(n^2)
+            for (const auto &[k, _]: joins) {
+                const auto &[t1, t2]{k};
+                if (t1 == table_id && std::find(table_seq.cbegin(), table_seq.cend(), t2) == table_seq.cend()) {
+                    table_seq.push_back(t1);
+                }
+
+                if (t2 == table_id && std::find(table_seq.cbegin(), table_seq.cend(), t1) == table_seq.cend()) {
+                    table_seq.push_back(t2);
+                }
+            }
+        }
+
+        assert(table_seq.size() == selected_tables.size());
+
+
+        std::vector<std::shared_ptr<const TableMeta>> selected_table_metas;
+        for (const auto &table_id: table_seq) {
+            selected_table_metas.push_back(system.GetTableMeta(table_id));
+        }
+        for (FieldID i{1}; i < table_seq.size(); ++i) {
+            table_offset[i] = table_offset[i - 1] + selected_table_metas[i - 1]->field_meta.Count();
+        }
+        std::shared_ptr<OpNode> join_root{table_scanners[table_seq[0]]};
+        for (TableID i{1} /* index in selected_tables */; i < table_seq.size(); ++i) {
+            std::vector<std::shared_ptr<JoinCondition>> join_conds_i;
+            for (TableID j{0}/* pointer to previous tables */; j < i; ++j) {
+                auto cond_tables{std::make_pair(table_seq[j], table_seq[i])};
+                auto ordered_cond_tables{make_ordered(cond_tables)};
+                if (joins.count(ordered_cond_tables) > 0) {
+                    auto [it, end]{joins.equal_range(ordered_cond_tables)};
+                    auto join_cond_i_j{it->second};  // now `JoinCondition::tables` is ascending
+                    for (; it != end; ++it) {
+                        JoinCondition::Merge(join_cond_i_j, it->second);
+                    }
+                    join_cond_i_j->MatchSeq(cond_tables);  // here `JoinCondition::tables` is the same `cond_tables`
+
+                    for (auto &cond: join_cond_i_j->conditions) {  // offset the 1st table
+                        std::get<0>(cond) += table_offset[j];
+                    }
+                    join_conds_i.push_back(join_cond_i_j);
+                }
+            }
+            auto join_cond{JoinCondition::Merge(join_conds_i)};
+            join_root = std::make_shared<JoinNode>(join_root, table_scanners[i], join_cond);
+        }
+        root = join_root;
+    } else {  // connect scan node directly
+        assert(table_scanners.size() == 1);
+        root = table_scanners.begin()->second;
+    }
 
     // map from `table_id` to table position in sequence
     std::map<TableID, TableID> table_mapping;
@@ -252,7 +347,7 @@ antlrcpp::Any DBVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) 
     std::vector<std::string> header;
     std::vector<FieldID> target;
 
-    // generate projection node
+    // generate projection node and header info
     if (ctx->selectors()->children[0]->getText() == "*") {  // select all columns
         for (TableID i{0}; i < selected_tables.size(); ++i) {  // show in the order in which user selects tables
             auto table_pos{table_mapping[selected_tables[i]]};
@@ -274,7 +369,7 @@ antlrcpp::Any DBVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) 
 }
 
 antlrcpp::Any DBVisitor::visitSelect_table_(SQLParser::Select_table_Context *ctx) {
-    const auto &[header, root] {
+    const auto [header, root] {
             ctx->select_table()->accept(this).as<std::pair<std::vector<std::string>, std::shared_ptr<OpNode>>>()};
     return system.Select(header, root);
 }
@@ -304,8 +399,6 @@ std::shared_ptr<Cmp> DBVisitor::ConvertOperator(SQLParser::Operator_Context *ctx
 antlrcpp::Any DBVisitor::visitWhere_and_clause(SQLParser::Where_and_clauseContext *ctx) {
     std::multimap<TableID, std::shared_ptr<FilterCondition>> filters;
     std::multimap<JoinPair, std::shared_ptr<JoinCondition>> joins;
-    std::map<TableID, std::shared_ptr<OpNode>> table_scanners;
-    std::shared_ptr<OpNode> root;
 
     // collect conditions
     for (const auto &clause: ctx->where_clause()) {
@@ -316,89 +409,12 @@ antlrcpp::Any DBVisitor::visitWhere_and_clause(SQLParser::Where_and_clauseContex
         } else if (condition->type == ConditionType::JOIN) {
             auto jc{std::static_pointer_cast<JoinCondition>(condition)};
             joins.insert({jc->tables, jc});
+        } else {
+            assert(false);
         }
-        assert(false);
     }
 
-    // construct table scan nodes, with filter conditions within a table
-    for (const auto &table_id: selected_tables) {
-        auto and_cond{std::make_shared<AndCondition>(FilterConditionList{}, table_id)};
-        for (auto [i, end]{filters.equal_range(table_id)}; i != end; ++i) {
-            and_cond->AddCondition(i->second);
-        }
-        table_scanners.insert({table_id, system.GetTrivialScanNode(table_id, and_cond)});
-
-        // TODO: [c7w] add index scan node when applicable
-    }
-
-    std::vector<TableID> bfs_q{selected_tables[0]};
-    std::vector<FieldID> offsets{0};
-    if (selected_tables.size() > 1) {  // construct join nodes
-        // BFS
-        FieldID ptr{0};  // to the last element
-        auto pop = [&]() {
-            auto curr{bfs_q[ptr]};
-            ++ptr;
-            return curr;
-        };
-        auto empty = [&]() { return ptr == bfs_q.size(); };
-
-        while (!empty()) {
-            auto table_id{pop()};
-            // well. brute force ... :(
-            // but who would join many tables ... :)
-            // O(n^2)
-            for (const auto &[k, _]: joins) {
-                const auto &[t1, t2]{k};
-                if (t1 == table_id && std::find(bfs_q.cbegin(), bfs_q.cend(), t2) == bfs_q.cend()) {
-                    bfs_q.push_back(t1);
-                }
-
-                if (t2 == table_id && std::find(bfs_q.cbegin(), bfs_q.cend(), t1) == bfs_q.cend()) {
-                    bfs_q.push_back(t2);
-                }
-            }
-        }
-
-        assert(bfs_q.size() == selected_tables.size());
-
-        std::vector<std::shared_ptr<const TableMeta>> selected_table_metas;
-        for (const auto &table_id: bfs_q) {
-            selected_table_metas.push_back(system.GetTableMeta(table_id));
-        }
-        for (FieldID i{1}; i < bfs_q.size(); ++i) {
-            offsets[i] = offsets[i - 1] + selected_table_metas[i - 1]->field_meta.Count();
-        }
-        std::shared_ptr<OpNode> join_root{table_scanners[bfs_q[0]]};
-        for (TableID i{1} /* index in selected_tables */; i < bfs_q.size(); ++i) {
-            std::vector<std::shared_ptr<JoinCondition>> join_conds_i;
-            for (TableID j{0}/* pointer to previous tables */; j < i; ++j) {
-                auto cond_tables{std::make_pair(bfs_q[j], bfs_q[i])};
-                auto ordered_cond_tables{make_ordered(cond_tables)};
-                if (joins.count(ordered_cond_tables) > 0) {
-                    auto [it, end]{joins.equal_range(ordered_cond_tables)};
-                    auto join_cond_i_j{it->second};  // now `JoinCondition::tables` is ascending
-                    for (; it != end; ++it) {
-                        JoinCondition::Merge(join_cond_i_j, it->second);
-                    }
-                    join_cond_i_j->MatchSeq(cond_tables);  // here `JoinCondition::tables` is the same `cond_tables`
-
-                    for (auto &cond: join_cond_i_j->conditions) {  // offset the 1st table
-                        std::get<0>(cond) += offsets[j];
-                    }
-                    join_conds_i.push_back(join_cond_i_j);
-                }
-            }
-            auto join_cond{JoinCondition::Merge(join_conds_i)};
-            join_root = std::make_shared<JoinNode>(join_root, table_scanners[i], join_cond);
-        }
-        root = join_root;
-    } else {  // connect scan node directly
-        assert(table_scanners.size() == 1);
-        root = table_scanners.begin()->second;
-    }
-
-    return std::make_tuple(bfs_q, offsets, root);
+    return std::make_pair(filters, joins);
 }
 
 antlrcpp::Any DBVisitor::visitColumn(SQLParser::ColumnContext *ctx) {
@@ -459,6 +475,7 @@ DBVisitor::GetValue(SQLParser::ValueContext *ctx, const std::shared_ptr<FieldMet
     auto str_p{ctx->String()};
     if (str_p) {
         std::string str_val{str_p->getText()};
+        strip_quote(str_val);
         if (selected_field->type == FieldType::CHAR) {
             if (!ignore_max_size && str_val.size() > selected_field->max_size) {
                 throw OperationError{"Data too long for column `{}`", selected_field->name};
@@ -528,7 +545,9 @@ antlrcpp::Any DBVisitor::visitWhere_like_string(SQLParser::Where_like_stringCont
     auto col{ctx->column()->accept(this).as<std::shared_ptr<Column>>()};
     auto table_id{col->table_id};
     auto field_meta{col->field_meta};
-    return make_cond<LikeCondition>(ctx->String()->getText(), table_id, field_meta->field_id);
+    auto sql_pattern{ctx->String()->getText()};
+    strip_quote(sql_pattern);
+    return make_cond<LikeCondition>(sql_pattern, table_id, field_meta->field_id);
 }
 
 antlrcpp::Any DBVisitor::visitWhere_in_list(SQLParser::Where_in_listContext *ctx) {
@@ -565,4 +584,49 @@ antlrcpp::Any DBVisitor::visitSelector(SQLParser::SelectorContext *ctx) {
     }
     // `COUNT(*)`
     return std::make_shared<Column>(-1, nullptr, ColumnType::COUNT_REC);
+}
+
+antlrcpp::Any DBVisitor::visitDelete_from_table(SQLParser::Delete_from_tableContext *ctx) {
+    auto table_name{ctx->Identifier()->getText()};
+    auto table_id{system.GetTableID(table_name)};
+    selected_tables.clear();
+    selected_tables.push_back(table_id);
+    return_conditions = true;
+
+    auto table_tree_any{ctx->where_and_clause()->accept(this)};
+    auto &[filters, joins]{
+            table_tree_any.as<
+                    std::pair<
+                            std::multimap<TableID, std::shared_ptr<FilterCondition>>,
+                            std::multimap<JoinPair, std::shared_ptr<JoinCondition>>
+                    >
+            >()
+    };
+    assert(joins.empty());
+    assert(filters.count(table_id) == filters.size());
+
+    FilterConditionList filter_list;
+    for (const auto &[_, cond]: filters) {
+        filter_list.push_back(cond);
+    }
+    auto and_cond{std::make_shared<AndCondition>(std::move(filter_list), table_id)};
+
+    return system.Delete(table_id, and_cond);
+}
+
+void DBVisitor::strip_quote(std::string &possibly_quoted) {
+    if (possibly_quoted.empty()) {
+        return;
+    }
+    auto begin{possibly_quoted.begin()};
+    if (*begin == '\'') {
+        possibly_quoted.erase(begin);
+    }
+    if (possibly_quoted.empty()) {
+        return;
+    }
+    auto end{std::prev(possibly_quoted.end())};
+    if (*end == '\'') {
+        possibly_quoted.erase(end);
+    }
 }

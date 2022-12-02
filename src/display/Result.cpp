@@ -18,13 +18,13 @@ std::string TextResult::ToString() {
 }
 
 TableResult::TableResult(std::vector<std::string> headers, const RecordList &record_list) :
-        headers{headers}, table{nullptr} {
+        headers{std::move(headers)}, table{nullptr} {
     for (const auto &record: record_list) {
         records.emplace_back(record->ToString());
     }
 }
 
-TableResult::Row TableResult::MoveToRow(std::vector<std::string> &&los) {
+TableResult::Row TableResult::ToRow(std::vector<std::string> los) {
     Row buffer;
     buffer.insert(buffer.end(), std::make_move_iterator(los.begin()), std::make_move_iterator(los.end()));
     return std::move(buffer);
@@ -35,15 +35,11 @@ std::string TableResult::ToString() {
     if (records.empty()) {
         output = "Empty Set";
     } else {
-        if (table) {
-            return table->str();
-        }
-
         // create table
-        table = new tabulate::Table;
-        table->add_row(MoveToRow(std::move(headers)));
+        table = std::make_shared<tabulate::Table>();
+        table->add_row(ToRow(headers));
         for (auto &record: records) {
-            table->add_row(MoveToRow(std::move(record)));
+            table->add_row(ToRow(record));
         }
 
         // table format
@@ -56,7 +52,7 @@ std::string TableResult::ToString() {
             table->row(record_len).format().border_top("").corner_top_left("").corner_top_right("");
         }
 
-        output = table->str() + "\n" + fmt::format("{} rows in set", records.size());
+        output = table->str() + "\n" + fmt::format("{} row(s) in set", records.size());
     }
     return output + fmt::format(" ({:.2f} sec)", runtime);
 }

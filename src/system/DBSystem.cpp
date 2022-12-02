@@ -84,7 +84,6 @@ std::shared_ptr<Result> DBSystem::UseDatabase(const std::string &db_name) {
         table_name_map.insert({table_name, table_id});
         table_data_fd[table_id] = FileSystem::OpenFile(DB_DIR / db_name / fmt::format(TABLE_DATA_PATTERN, table_id));
         table_meta_fd[table_id] = FileSystem::OpenFile(DB_DIR / db_name / fmt::format(TABLE_META_PATTERN, table_id));
-        table_index_fd[table_id] = FileSystem::OpenFile(DB_DIR / db_name / fmt::format(TABLE_INDEX_PATTERN, table_id));
         meta_map[table_id] = TableMeta::FromSrc(table_meta_fd[table_id], buffer);
     }
 
@@ -126,13 +125,11 @@ void DBSystem::CloseDatabase() {
     };
     std::for_each(table_meta_fd.begin(), table_meta_fd.end(), close_func);
     std::for_each(table_data_fd.begin(), table_data_fd.end(), close_func);
-    std::for_each(table_index_fd.begin(), table_index_fd.begin(), close_func);
 
     // reset table status
     table_name_map.clear();
     table_data_fd.clear();
     table_meta_fd.clear();
-    table_index_fd.clear();
 
     current_database = "";
     table_info_fd = -1;
@@ -161,9 +158,7 @@ std::shared_ptr<Result>
 DBSystem::CreateTable(const std::string &table_name, const std::vector<std::shared_ptr<FieldMeta>> &field_meta,
                       std::optional<RawPrimaryKey> raw_pk,
                       const std::vector<RawForeignKey> &raw_fks) {
-    if (!on_use) {
-        throw OperationError{"No database selected"};
-    }
+    CheckOnUse();
 
     if (CheckTableExist(table_name)) {
         throw OperationError{"Table `{}` already exists", table_name};
@@ -177,7 +172,8 @@ DBSystem::CreateTable(const std::string &table_name, const std::vector<std::shar
      * Refactored: field position and field id is just the same
      * So field deletion should update all possible foreign keys in the database
      */
-    auto meta{std::make_shared<TableMeta>(0, FieldMeteTable{field_meta}, table_meta_fd[table_id], buffer)};
+    auto meta{std::make_shared<TableMeta>(table_id, table_name, 0, FieldMeteTable{field_meta}, table_meta_fd[table_id],
+                                          buffer)};
 
     // primary key and foreign keys
 
@@ -195,8 +191,6 @@ DBSystem::CreateTable(const std::string &table_name, const std::vector<std::shar
             DB_DIR / current_database / fmt::format(TABLE_DATA_PATTERN, table_id));
     table_meta_fd[table_id] = FileSystem::NewFile(
             DB_DIR / current_database / fmt::format(TABLE_META_PATTERN, table_id));
-    table_index_fd[table_id] = FileSystem::NewFile(
-            DB_DIR / current_database / fmt::format(TABLE_INDEX_PATTERN, table_id));
     table_name_map.insert({table_name, table_id});
     meta_map[table_id] = std::move(meta);
 
@@ -312,7 +306,7 @@ std::shared_ptr<DataPage> DBSystem::FindPageWithSpace(TableID table_id, RecordSi
      * Dummy implementation: check page by page
      */
     auto data_fd{table_data_fd[table_id]};
-    for (int i{0}; i < meta->page_count; ++i) {
+    for (int i{0}; i < meta->data_page_count; ++i) {
         auto page{buffer.ReadPage(data_fd, i)};
         auto data_page{std::make_shared<DataPage>(page, *meta)};
         if (data_page->Contains(size)) {
@@ -321,16 +315,10 @@ std::shared_ptr<DataPage> DBSystem::FindPageWithSpace(TableID table_id, RecordSi
     }
 
     // no enough space on current pages
-    auto page{buffer.CreatePage(data_fd, meta->page_count++)};
+    auto page{buffer.CreatePage(data_fd, meta->data_page_count++)};
     auto data_page{std::make_shared<DataPage>(page, *meta)};
     data_page->Init();
     return data_page;
-}
-
-std::shared_ptr<Result> DBSystem::InsertResult() {
-    auto res{std::shared_ptr<Result>(new TextResult{fmt::format("{} records inserted", insert_record_counter)})};
-    insert_record_counter = 0;
-    return res;
 }
 
 void DBSystem::CheckConstraint(const TableMeta &meta, const std::shared_ptr<Record> &record) const {
@@ -356,12 +344,6 @@ void DBSystem::CheckConstraint(const TableMeta &meta, const std::shared_ptr<Reco
 
         }
     }
-}
-
-void DBSystem::Insert(TableID table_id, std::shared_ptr<Record> &record) {
-    auto page_to_insert{FindPageWithSpace(table_id, record->Size())};
-    page_to_insert->Insert(record);
-    ++insert_record_counter;
 }
 
 std::shared_ptr<Result> DBSystem::DescribeTable(const std::string &table_name) {
@@ -445,6 +427,50 @@ std::shared_ptr<OpNode> DBSystem::GetTrivialScanNode(TableID table_id, const std
     return std::make_shared<TrivialScanNode>(buffer, meta_map[table_id], cond, table_data_fd[table_id]);
 }
 
-std::shared_ptr<OpNode> DBSystem::GetDeleteNode(TableID table_id, const std::shared_ptr<FilterCondition> &cond) {
+std::shared_ptr<Result> DBSystem::Select(const std::vector<std::string> &header, const std::shared_ptr<OpNode> &plan) {
+    RecordList records;
+    while (true) {
+        RecordList ret{plan->Next()};
+        if (ret.empty()) {
+            break;
+        }
+        std::move(ret.begin(), ret.end(), std::back_inserter(records));
+    }
+    return std::make_shared<TableResult>(header, records);
+}
 
+std::shared_ptr<Result> DBSystem::Insert(TableID table_id, RecordList &records) {
+    for (const auto &record: records) {
+        auto page_to_insert{FindPageWithSpace(table_id, record->Size())};
+        page_to_insert->Insert(record);
+        // TODO: update all indexes
+    }
+    return std::make_shared<TextResult>(fmt::format("{} record(s) inserted", records.size()));
+}
+
+std::shared_ptr<Result> DBSystem::Delete(TableID table_id, const std::shared_ptr<FilterCondition> &cond){
+    assert(cond != nullptr);
+    auto data_fd{table_data_fd[table_id]};
+    std::size_t delete_counter{0};
+    for(PageID i{0}; i < meta_map[table_id]->data_page_count; ++i) {
+        auto page = buffer.ReadPage(data_fd, i);
+        DataPage dp{page, *meta_map[table_id]};
+        RecordList ret;
+        for (FieldID j{0}; j< dp.header.slot_count; ++j) {
+            auto record{dp.Select(j)};
+            if (record != nullptr && (*cond)(record)) {
+                ++delete_counter;
+                // perform delete
+                dp.Delete(j);
+                // TODO: delete entries in index
+            }
+        }
+    }
+    return std::make_shared<TextResult>(fmt::format("{} record(s) deleted", delete_counter));
+}
+
+void DBSystem::CheckOnUse() const {
+    if (!on_use) {
+        throw OperationError{"No database selected"};
+    }
 }

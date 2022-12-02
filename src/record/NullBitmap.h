@@ -26,7 +26,7 @@ public:
         return std::move(ret);
     }
 
-    void Write(uint8_t *dst) const {
+    void Write(uint8_t *&dst) const {
         write_var(dst, data, (field_count + 7) / 8);
     }
 

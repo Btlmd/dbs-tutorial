@@ -71,9 +71,10 @@ private:
     Page *AllocPage(FileID fd, PageID page_id);
 
     Page *buffer_;
-    std::unordered_multimap<FileID, Page *> buffer_map_fd_;
-    std::unordered_map<std::pair<FileID, PageID>, Page *, BufferHash> buffer_map_;
-    std::unordered_map<Page *, std::list<Page *>::iterator> visit_record_map_;
+    std::multimap<FileID, Page *> buffer_map_fd_;
+//    std::unordered_map<std::pair<FileID, PageID>, Page *, BufferHash> buffer_map_;
+    std::map<std::pair<FileID, PageID>, Page *> buffer_map_;
+    std::map<Page *, std::list<Page *>::iterator> visit_record_map_;
     std::list<Page *> free_record_;
     std::list<Page *> visit_record_;
     FileSystem page_fs_;
