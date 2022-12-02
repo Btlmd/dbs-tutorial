@@ -34,8 +34,9 @@ jobs:
         sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 50
         sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 50
 
-    - name: Configure Conan
+    - name: Configure Dependencies
       run: |
+        sudo apt-get install libboost-all-dev
         pip install "conan<2.0"
         conan profile new default --detect
         conan profile update settings.compiler.libcxx=libstdc++11 default
