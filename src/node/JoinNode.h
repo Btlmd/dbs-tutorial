@@ -11,20 +11,19 @@
 class JoinNode : public OpNode {
 public:
     std::shared_ptr<JoinCondition> cond;
+    RecordList rhs_records;
+    bool read;
 
     JoinNode(std::shared_ptr<OpNode> lhs, std::shared_ptr<OpNode> rhs, std::shared_ptr<JoinCondition> cond) :
-            OpNode{{std::move(lhs), std::move(rhs)}}, cond{std::move(cond)} {}
+            OpNode{{std::move(lhs), std::move(rhs)}}, cond{std::move(cond)}, read{false} {}
 
     RecordList Next() override {
         // Brute force: read all rhs records into memory
-        RecordList rhs_records;
-        while (true) {
-            RecordList rhs_record_slice{children[1]->Next()};
-            if (rhs_record_slice.empty()) {
-                break;
-            }
-            std::move(rhs_record_slice.begin(), rhs_record_slice.end(), std::back_inserter(rhs_records));
+        if (!read) {
+            read = true;
+            rhs_records = children[1]->All();
         }
+
 
         RecordList lhs_record_slice{children[0]->Next()};
         if (lhs_record_slice.empty()) {

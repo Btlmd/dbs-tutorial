@@ -67,15 +67,15 @@ public:
                       });
         }
 
-#ifdef DEBUG
-        {
-            TraceLog << "Aggregation: sorted records";
-            for (const auto &r: records) {
-                TraceLog << boost::algorithm::join(r->ToString(), ", ");
-            }
-
-        };
-#endif
+//#ifdef DEBUG
+//        {
+//            TraceLog << "Aggregation: sorted records";
+//            for (const auto &r: records) {
+//                TraceLog << boost::algorithm::join(r->ToString(), ", ");
+//            }
+//
+//        };
+//#endif
 
         RecordList ret;
 
@@ -95,7 +95,7 @@ public:
                     )
                     ) {
                 ++boarder;
-                TraceLog << "Aggregate ptr step";
+//                TraceLog << "Aggregate ptr step";
             }
 
             // aggregate in the segment

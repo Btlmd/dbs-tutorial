@@ -290,11 +290,11 @@ antlrcpp::Any DBVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) 
             for (const auto &[k, _]: joins) {
                 const auto &[t1, t2]{k};
                 if (t1 == table_id && std::find(table_seq.cbegin(), table_seq.cend(), t2) == table_seq.cend()) {
-                    table_seq.push_back(t1);
+                    table_seq.push_back(t2);
                 }
 
                 if (t2 == table_id && std::find(table_seq.cbegin(), table_seq.cend(), t1) == table_seq.cend()) {
-                    table_seq.push_back(t2);
+                    table_seq.push_back(t1);
                 }
             }
         }
@@ -554,16 +554,14 @@ antlrcpp::Any DBVisitor::visitWhere_operator_expression(SQLParser::Where_operato
         return make_cond<ValueCompareCondition>(value_field, table_id, field_meta->field_id, comparer);
     }
     if (ctx->expression()->column()) {
-        auto [rhs_table_id, rhs_field_meta] {
-                ctx->expression()->column()->accept(this).as<std::pair<TableID, std::shared_ptr<FieldMeta>>>()
-        };
-        if (rhs_table_id == table_id) {
-            return make_cond<FieldCmpCondition>(table_id, field_meta->field_id, rhs_field_meta->field_id,
+        auto r_col{ctx->expression()->column()->accept(this).as<std::shared_ptr<Column>>()};
+        if ( r_col->table_id == table_id) {
+            return make_cond<FieldCmpCondition>(table_id, field_meta->field_id, r_col->field_meta->field_id,
                                                 comparer);
         } else {
             return make_cond<JoinCondition>(
-                    std::vector<JoinCond>{{field_meta->field_id, rhs_field_meta->field_id, comparer}},
-                    std::make_pair(table_id, rhs_table_id)
+                    std::vector<JoinCond>{{field_meta->field_id, r_col->field_meta->field_id, comparer}},
+                    std::make_pair(table_id, r_col->table_id)
             );
         }
     }
