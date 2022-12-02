@@ -18,7 +18,9 @@ public:
     uint8_t *data{};
 
     explicit NullBitmap(FieldID field_count) :
-            field_count{field_count}, data{new uint8_t[(field_count + 7) / 8]} {}
+            field_count{field_count}, data{new uint8_t[(field_count + 7) / 8]} {
+        memset(data, 0 ,(field_count + 7) / 8);
+    }
 
     static std::shared_ptr<NullBitmap> FromSrc(const uint8_t *&src, FieldID field_count) {
         auto ret{std::make_shared<NullBitmap>(field_count)};

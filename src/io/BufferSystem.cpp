@@ -7,7 +7,7 @@
 #include <cassert>
 
 Page *BufferSystem::ReadPage(FileID fd, PageID page_id) {
-    TraceLog << "BufferSystem Read page @" << fd << " #" << page_id;
+    TraceLog << "BufferSystem Read @" << fd << ", #" << page_id;
     Page *pos;
     auto lookup {buffer_map_.find({fd, page_id})};
     if (lookup == buffer_map_.end()) {
@@ -19,12 +19,14 @@ Page *BufferSystem::ReadPage(FileID fd, PageID page_id) {
         pos = lookup->second;
     }
     Access(pos);
+    TraceLog << " - Use page" << pos->Seq();
     return pos;
 }
 
 BufferSystem::BufferSystem() {
     buffer_ = new Page[BUFFER_SIZE];
     for (int i{0}; i < BUFFER_SIZE; ++i) {
+        buffer_[i].seq_id = i;
         free_record_.push_back(&buffer_[i]);
         visit_record_.push_back(&buffer_[i]);
         visit_record_map_.insert({&buffer_[i], std::prev(visit_record_.end())});
@@ -33,7 +35,7 @@ BufferSystem::BufferSystem() {
 
 void BufferSystem::WriteBack(Page *page) {
     if (page->dirty) {
-        TraceLog << "Write Back #" << page->id;
+        TraceLog << "Write Back Dirty" << page->Seq();
         FileSystem::WritePage(page->fd, page->id, page->data);
     }
     page->dirty = false;
@@ -71,7 +73,7 @@ void BufferSystem::CloseFile(FileID fd) {
 }
 
 Page *BufferSystem::CreatePage(FileID fd, PageID page_id) {
-    TraceLog << "New page @" << fd << " #" << page_id;
+    TraceLog << "Create page for @" << fd << ", #" << page_id;
     return AllocPage(fd, page_id);
 }
 
@@ -88,8 +90,13 @@ Page *BufferSystem::AllocPage(FileID fd, PageID page_id) {
         pos = free_record_.front();
         free_record_.pop_front();
     }
-    pos->fd = fd;
     buffer_map_.insert({{fd, page_id}, pos});
     buffer_map_fd_.insert({fd, pos});
+
+    // update page info
+    pos->fd = fd;
+    pos->id = page_id;
+
+    TraceLog << "Allocated" << pos->Seq();
     return pos;
 }

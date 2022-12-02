@@ -23,6 +23,8 @@
 class Cmp {
 public:
     virtual bool operator()(const std::shared_ptr<Field> &lhs, const std::shared_ptr<Field> &rhs) const = 0;
+
+    static void flip(std::shared_ptr<Cmp> &ptr);
 };
 
 typedef std::vector<std::shared_ptr<Cmp>> CmpList;
@@ -68,6 +70,25 @@ public:
         return *lhs != *rhs;
     }
 };
+
+inline void Cmp::flip(std::shared_ptr<Cmp> &ptr) {
+    if (std::dynamic_pointer_cast<LeCmp>(ptr)) {
+        ptr = std::make_shared<GeCmp>();
+        return;
+    }
+    if (std::dynamic_pointer_cast<GeCmp>(ptr)) {
+        ptr = std::make_shared<LeCmp>();
+        return;
+    }
+    if (std::dynamic_pointer_cast<LeqCmp>(ptr)) {
+        ptr = std::make_shared<GeCmp>();
+        return;
+    }
+    if (std::dynamic_pointer_cast<GeqCmp>(ptr)) {
+        ptr = std::make_shared<LeCmp>();
+        return;
+    }
+}
 
 enum class ConditionType {
     FILTER = 0,
@@ -311,17 +332,18 @@ public:
 
     explicit JoinCondition(std::vector<JoinCond> conditions, JoinPair tables) :
             Condition{ConditionType::JOIN}, conditions{std::move(conditions)},
-            tables{std::move(make_ordered(tables))} {}
+            tables{std::move(tables)} {}
 
     bool operator()(const std::shared_ptr<Record> &lhs, const std::shared_ptr<Record> &rhs) const {
         return std::ranges::all_of(conditions.begin(), conditions.end(), [&lhs, &rhs](const auto &cond) {
             return (*std::get<2>(cond))(lhs->fields[std::get<0>(cond)], rhs->fields[std::get<1>(cond)]);
-        });
+        });  // note that `all_of` return true for an empty container
     }
 
     void Swap() {
-        for (auto &[lhs, rhs, _]: conditions) {
+        for (auto &[lhs, rhs, cond_p]: conditions) {
             std::swap(lhs, rhs);
+            Cmp::flip(cond_p);
         }
         std::swap(tables.first, tables.second);
     }
@@ -335,14 +357,14 @@ public:
 
     static void Merge(std::shared_ptr<JoinCondition> &dst, const std::shared_ptr<JoinCondition> &other) {
         if (dst != other) {
-            assert(dst->tables == other->tables);
+//            assert(dst->tables == other->tables);
             std::copy(other->conditions.cbegin(), other->conditions.cend(), std::back_inserter(dst->conditions));
         }
     }
 
-    static std::shared_ptr<JoinCondition> Merge(const std::vector<std::shared_ptr<JoinCondition>> &conditions) {
-        assert(!conditions.empty());
-        auto ret{std::make_shared<JoinCondition>(std::vector<JoinCond>{}, conditions[0]->tables)};
+    static std::shared_ptr<JoinCondition>
+    Merge(const std::vector<std::shared_ptr<JoinCondition>> &conditions) {
+        auto ret{std::make_shared<JoinCondition>(std::vector<JoinCond>{}, JoinPair{-1, -1})};
         for (const auto &cond: conditions) {
             Merge(ret, cond);
         }

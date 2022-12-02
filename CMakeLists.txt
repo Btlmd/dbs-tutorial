@@ -24,7 +24,7 @@ endif()
     include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
     conan_basic_setup()
         # Boost
-        FIND_PACKAGE(Boost 1.80 REQUIRED COMPONENTS log_setup log)
+        FIND_PACKAGE(Boost 1.80 REQUIRED COMPONENTS log_setup log ${BOOST_PYTHONLIB})
         include_directories(${Boost_INCLUDE_DIR})
 
     # From ./external
@@ -38,14 +38,82 @@ endif()
 list(APPEND LIBS cpp-terminal antlr4-runtime fmt Boost::log_setup Boost::log)
 
 # Generate grammar CPP files
-execute_process(COMMAND ${PROJECT_SOURCE_DIR}/utils/generate_grammar.sh)
+#execute_process(COMMAND ${PROJECT_SOURCE_DIR}/utils/generate_grammar.sh)
 
-# project source
+# Project source
 file(GLOB_RECURSE dbms_source src/**/*.cpp)
-add_executable(main src/main.cpp ${dbms_source})
+
+# `main` static library
+add_library(main STATIC ${dbms_source})
 target_link_libraries(main ${LIBS})
 target_include_directories(main PUBLIC src)
 
+# `main` shared library
+add_library(main_shared SHARED ${dbms_source})
+target_link_libraries(main_shared ${LIBS})
+target_include_directories(main_shared PUBLIC src)
+
+# `front` target
+add_executable(front src/main.cpp)
+target_link_libraries(front main)
+
+# `debug` target
+add_executable(debug src/debug.cpp)
+target_link_libraries(debug main)
+
+# Boost.Python
+FIND_PACKAGE(Boost COMPONENTS python${PYTHON_VERSION_SUFFIX})
+FIND_PACKAGE(PythonInterp 3)
+FIND_PACKAGE(PythonLibs 3 REQUIRED)
+message(STATUS "PYTHON_LIBRARIES = ${PYTHON_LIBRARIES}")
+message(STATUS "PYTHON_EXECUTABLE = ${PYTHON_EXECUTABLE}")
+message(STATUS "PYTHON_INCLUDE_DIRS = ${PYTHON_INCLUDE_DIRS}")
+message(STATUS "Boost_LIBRARIES = ${Boost_LIBRARIES}")
+
+# `connect` target
+python_add_module(connect tests/python_utils/connect.cpp)
+target_include_directories(connect PUBLIC ${Boost_INCLUDE_DIRS} ${PYTHON_INCLUDE_DIRS})
+target_link_libraries(connect ${Boost_LIBRARIES} ${PYTHON_LIBRARIES} main)
+
+FIND_PACKAGE(PythonInterp)
+
+if (PYTHONINTERP_FOUND)
+    if (UNIX AND NOT APPLE)
+        if (PYTHON_VERSION_MAJOR EQUAL 3)
+            FIND_PACKAGE(Boost COMPONENTS python${PYTHON_VERSION_SUFFIX})
+            FIND_PACKAGE(PythonInterp 3)
+            FIND_PACKAGE(PythonLibs 3 REQUIRED)
+        else()
+            FIND_PACKAGE(Boost COMPONENTS python)
+            FIND_PACKAGE(PythonInterp)
+            FIND_PACKAGE(PythonLibs REQUIRED)
+        endif()
+    else()
+        if (PYTHON_VERSION_MAJOR EQUAL 3)
+            FIND_PACKAGE(Boost COMPONENTS python${PYTHON_VERSION_MAJOR}${PYTHON_VERSION_MINOR})
+            FIND_PACKAGE(PythonInterp 3)
+            FIND_PACKAGE(PythonLibs 3 REQUIRED)
+        else()
+            FIND_PACKAGE(Boost COMPONENTS python${PYTHON_VERSION_MAJOR}${PYTHON_VERSION_MINOR})
+            FIND_PACKAGE(PythonInterp)
+            FIND_PACKAGE(PythonLibs REQUIRED)
+        endif()
+    endif()
+else()
+    message("Python not found")
+endif()
+
+message(STATUS "PYTHON_LIBRARIES = ${PYTHON_LIBRARIES}")
+message(STATUS "PYTHON_EXECUTABLE = ${PYTHON_EXECUTABLE}")
+message(STATUS "PYTHON_INCLUDE_DIRS = ${PYTHON_INCLUDE_DIRS}")
+message(STATUS "Boost_LIBRARIES = ${Boost_LIBRARIES}")
+
+# `connect_db` target
+python_add_module(connect_db tests/python_utils/connect.cpp)
+target_include_directories(connect_db PUBLIC ${Boost_INCLUDE_DIRS} ${PYTHON_INCLUDE_DIRS})
+target_link_libraries(connect_db main ${Boost_LIBRARIES} ${PYTHON_LIBRARIES})
+
+# tests
 enable_testing()
 find_package(GTest REQUIRED COMPONENTS gtest_main)
 function(GTEST TEST_NAME)

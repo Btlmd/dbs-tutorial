@@ -58,7 +58,7 @@ SlotID DataPage::Insert(std::shared_ptr<Record> record) {
 
     // update slot offset
     slot_ptr[-1] = slot_ptr[0] + record_size;
-    header.free_space -= record_size;
+    header.free_space -= record_size + sizeof(SlotID);
     assert(header.free_space >= 0);
     page->SetDirty();
     TraceLog << "Insert " << " @" << page->fd << " #" << page->id << " Slot " << header.slot_count << " : " << record->Repr();

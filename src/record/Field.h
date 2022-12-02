@@ -224,7 +224,7 @@ public:
     static std::shared_ptr<Char> FromSrc(const uint8_t *&src, RecordSize max_len) {
         std::string buffer;
         read_string_null_terminated(src, buffer);
-        assert(buffer.size() < max_len);
+        assert(buffer.size() <= max_len);
         src += max_len + 1;
         return std::make_shared<Char>(std::move(buffer), max_len);
     }

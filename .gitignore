@@ -11,3 +11,4 @@ src/grammar/*
 
 # scratch file
 const_lut.h
+wordlist.txt

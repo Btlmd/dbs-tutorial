@@ -86,6 +86,7 @@ type_
     : 'INT'
     | 'VARCHAR' '(' Integer ')'
     | 'FLOAT'
+    | 'CHAR' '(' Integer ')'
     ;
 
 value_lists
