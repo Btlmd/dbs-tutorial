@@ -48,13 +48,13 @@ add_executable(main src/main.cpp ${dbms_source})
 target_link_libraries(main ${LIBS})
 target_include_directories(main PUBLIC src)
 
-#enable_testing()
-#find_package(GTest)
-#function(GTEST TEST_NAME)
-#    add_executable(${TEST_NAME} tests/${TEST_NAME}.cpp)
-#    target_link_libraries(${TEST_NAME} ${LIBS} GTest::gtest_main)
-#    gtest_discover_tests(${TEST_NAME})
-#endfunction()
-#
-## test cases
-#GTEST(basic)
+enable_testing()
+find_package(GTest REQUIRED COMPONENTS gtest_main)
+function(GTEST TEST_NAME)
+    add_executable(${TEST_NAME} tests/${TEST_NAME}.cpp)
+    target_link_libraries(${TEST_NAME} ${LIBS} GTest::gtest_main)
+    gtest_discover_tests(${TEST_NAME})
+endfunction()
+
+# test cases
+GTEST(basic)
