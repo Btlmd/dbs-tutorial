@@ -13,6 +13,7 @@
 #include <node/ScanNode.h>
 #include <node/JoinNode.h>
 #include <node/ProjectNode.h>
+#include <node/AggregateNode.h>
 
 #include <magic_enum.hpp>
 
@@ -29,7 +30,8 @@ antlrcpp::Any DBVisitor::visitCreate_db(SQLParser::Create_dbContext *ctx) {
 antlrcpp::Any DBVisitor::visitProgram(SQLParser::ProgramContext *ctx) {
     auto results{std::make_shared<ResultList>()};
     for (auto &child: ctx->children) {
-        if (dynamic_cast<SQLParser::StatementContext *>(child)) {
+        auto stmt_ctx{dynamic_cast<SQLParser::StatementContext *>(child)};
+        if (stmt_ctx && !stmt_ctx->Annotation() && !stmt_ctx->Null()) {
             DebugLog << "Process query: " << child->getText();
             auto begin{std::chrono::high_resolution_clock::now()};
             antlrcpp::Any result{child->accept(this)};
@@ -228,13 +230,14 @@ antlrcpp::Any DBVisitor::visitDescribe_table(SQLParser::Describe_tableContext *c
 }
 
 antlrcpp::Any DBVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) {
-    // config `selected_tables`,note that other functions should keep it unchanged
-    selected_tables.clear();
+    // config `selected_tables`, note that other functions should keep it unchanged
+    selected_tables_stack.push({});
+    auto &selected_tables{selected_tables_stack.top()};
+
     for (const auto &ident_ctx: ctx->identifiers()->Identifier()) {
         auto table_id{system.GetTableID(ident_ctx->getText())};
         selected_tables.push_back(table_id);
     }
-    return_conditions = false;
 
     std::multimap<TableID, std::shared_ptr<FilterCondition>> filters;
     std::multimap<JoinPair, std::shared_ptr<JoinCondition>> joins;
@@ -341,13 +344,10 @@ antlrcpp::Any DBVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) 
         table_mapping.insert({table_seq[i], i});
     }
 
-    // TODO: support aggregator
-    // when aggregator exists, basic column not quantified by GROUP BY is forbidden
-
+    // transform selectors
     std::vector<std::string> header;
     std::vector<FieldID> target;
-
-    // generate projection node and header info
+    std::vector<std::shared_ptr<Column>> columns;
     if (ctx->selectors()->children[0]->getText() == "*") {  // select all columns
         for (TableID i{0}; i < selected_tables.size(); ++i) {  // show in the order in which user selects tables
             auto table_pos{table_mapping[selected_tables[i]]};
@@ -355,16 +355,62 @@ antlrcpp::Any DBVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) 
             for (const auto &field: table_meta->field_meta.meta) {
                 header.push_back(table_meta->table_name + "." + field->name);
                 target.push_back(table_offset[table_mapping[selected_tables[i]]] + field->field_id);
+                columns.push_back(std::make_shared<Column>(selected_tables[i], field));
             }
         }
     } else {
         for (const auto &selector: ctx->selectors()->selector()) {
             header.push_back(selector->getText());
             auto col{selector->accept(this).as<std::shared_ptr<Column>>()};
-            target.push_back(table_offset[table_mapping[col->table_id]] + col->field_meta->field_id);
+            columns.push_back(col);
+            if (col->type == ColumnType::COUNT_REC) {
+                target.push_back(-1);
+            } else {
+                target.push_back(table_offset[table_mapping[col->table_id]] + col->field_meta->field_id);
+            }
         }
     }
-    root = std::make_shared<ProjectNode>(root, std::move(target));
+
+    assert(header.size() == columns.size());
+    assert(header.size() == target.size());
+
+
+    bool has_aggregator{std::any_of(columns.cbegin(), columns.cend(),
+                                    [](const auto &col) { return col->type != ColumnType::BASIC; })};
+    FieldID group_by_col{-1};
+    std::shared_ptr<Column> group_by_ptr{nullptr};
+    if (ctx->column()) {
+        auto col{ctx->column()->accept(this).as<std::shared_ptr<Column>>()};
+        auto table_id{col->table_id};
+        auto field_meta{col->field_meta};
+        group_by_col = table_offset[table_mapping[col->table_id]] + col->field_meta->field_id;
+        group_by_ptr = col;
+        // implies aggregating
+        has_aggregator = true;
+    }
+
+    // when aggregator exists, basic column not quantified by GROUP BY is forbidden
+    if (has_aggregator) {
+        for (FieldID i{0}; i < columns.size(); ++i) {
+            if (columns[i]->type == ColumnType::BASIC && group_by_col >= 0 && *columns[i] != *group_by_ptr) {
+                auto friendly_pos{i + 1};
+                throw OperationError{
+                        "Expression #{} of SELECT list is not in GROUP BY clause and contains nonaggregated column `{}`",
+                        friendly_pos,
+                        header[i]
+                };
+            }
+        }
+    }
+
+
+    if (has_aggregator) {
+        root = std::make_shared<AggregateNode>(root, std::move(columns), group_by_col, std::move(target));
+    } else {
+        root = std::make_shared<ProjectNode>(root, std::move(target));
+    }
+
+    selected_tables_stack.pop();
     return std::make_pair(header, root);
 }
 
@@ -418,6 +464,7 @@ antlrcpp::Any DBVisitor::visitWhere_and_clause(SQLParser::Where_and_clauseContex
 }
 
 antlrcpp::Any DBVisitor::visitColumn(SQLParser::ColumnContext *ctx) {
+    auto &selected_tables{selected_tables_stack.top()};
     auto table_name{ctx->Identifier(0)->getText()};
     auto field_name{ctx->Identifier(1)->getText()};
     auto table_id = system.GetTableID(table_name);
@@ -524,8 +571,11 @@ antlrcpp::Any DBVisitor::visitWhere_operator_expression(SQLParser::Where_operato
 }
 
 antlrcpp::Any DBVisitor::visitWhere_operator_select(SQLParser::Where_operator_selectContext *ctx) {
-    // TODO
-    return SQLBaseVisitor::visitWhere_operator_select(ctx);
+    auto col{ctx->column()->accept(this).as<std::shared_ptr<Column>>()};
+    auto table_id{col->table_id};
+    auto field_meta{col->field_meta};
+    auto select_plan{ctx->select_table()->accept(this).as<SelectPlan>()};
+    return make_cond<EqualToSubQueryCondition>(select_plan, table_id, field_meta->field_id);
 }
 
 antlrcpp::Any DBVisitor::visitWhere_null(SQLParser::Where_nullContext *ctx) {
@@ -537,8 +587,11 @@ antlrcpp::Any DBVisitor::visitWhere_null(SQLParser::Where_nullContext *ctx) {
 }
 
 antlrcpp::Any DBVisitor::visitWhere_in_select(SQLParser::Where_in_selectContext *ctx) {
-    // TODO
-    return SQLBaseVisitor::visitWhere_in_select(ctx);
+    auto col{ctx->column()->accept(this).as<std::shared_ptr<Column>>()};
+    auto table_id{col->table_id};
+    auto field_meta{col->field_meta};
+    auto select_plan{ctx->select_table()->accept(this).as<SelectPlan>()};
+    return make_cond<InSubQueryCondition>(select_plan, table_id, field_meta->field_id);
 }
 
 antlrcpp::Any DBVisitor::visitWhere_like_string(SQLParser::Where_like_stringContext *ctx) {
@@ -589,9 +642,12 @@ antlrcpp::Any DBVisitor::visitSelector(SQLParser::SelectorContext *ctx) {
 antlrcpp::Any DBVisitor::visitDelete_from_table(SQLParser::Delete_from_tableContext *ctx) {
     auto table_name{ctx->Identifier()->getText()};
     auto table_id{system.GetTableID(table_name)};
+
+    selected_tables_stack.push({});
+    auto &selected_tables{selected_tables_stack.top()};
+
     selected_tables.clear();
     selected_tables.push_back(table_id);
-    return_conditions = true;
 
     auto table_tree_any{ctx->where_and_clause()->accept(this)};
     auto &[filters, joins]{
@@ -611,6 +667,7 @@ antlrcpp::Any DBVisitor::visitDelete_from_table(SQLParser::Delete_from_tableCont
     }
     auto and_cond{std::make_shared<AndCondition>(std::move(filter_list), table_id)};
 
+    selected_tables_stack.pop();
     return system.Delete(table_id, and_cond);
 }
 

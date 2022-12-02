@@ -7,8 +7,6 @@ if (NOT UNIX OR APPLE)
     message(FATAL_ERROR "Only support Linux")
 endif()
 
-add_compile_definitions(BOOST_LOG_DYN_LINK)
-
 add_compile_definitions(DEBUG)
 
 if(NOT CMAKE_BUILD_TYPE)

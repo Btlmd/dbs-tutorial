@@ -32,10 +32,6 @@ typedef struct {
     SlotID slot;
 } RecordID;
 
-typedef std::variant<std::string, float, int> Value;
-
-typedef std::vector<Value> ValueList;
-
 // ForeignKey from std::string (to be further transformed into IDs)
 typedef std::tuple<std::string, std::string, std::vector<std::string>, std::vector<std::string>> RawForeignKey;
 

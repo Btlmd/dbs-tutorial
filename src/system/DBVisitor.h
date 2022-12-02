@@ -5,6 +5,8 @@
 #ifndef DBS_TUTORIAL_DBVISITOR_H
 #define DBS_TUTORIAL_DBVISITOR_H
 
+#include <stack>
+
 #include <grammar/SQLBaseVisitor.h>
 #include <system/DBSystem.h>
 #include <system/WhereConditions.h>
@@ -14,9 +16,7 @@ class DBVisitor : public SQLBaseVisitor {
 private:
     DBSystem &system;
 
-    std::vector<TableID> selected_tables;
-
-    bool return_conditions;
+    std::stack<std::vector<TableID>> selected_tables_stack;
 
     static std::shared_ptr<Cmp> ConvertOperator(SQLParser::Operator_Context *ctx);
 

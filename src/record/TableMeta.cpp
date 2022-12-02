@@ -74,6 +74,8 @@ std::shared_ptr<TableMeta> TableMeta::FromSrc(FileID fd, BufferSystem &buffer) {
             ++fk_loaded;
         }
     }
+
+    return ret;
 }
 
 void TableMeta::Write() {

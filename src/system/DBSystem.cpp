@@ -428,15 +428,7 @@ std::shared_ptr<OpNode> DBSystem::GetTrivialScanNode(TableID table_id, const std
 }
 
 std::shared_ptr<Result> DBSystem::Select(const std::vector<std::string> &header, const std::shared_ptr<OpNode> &plan) {
-    RecordList records;
-    while (true) {
-        RecordList ret{plan->Next()};
-        if (ret.empty()) {
-            break;
-        }
-        std::move(ret.begin(), ret.end(), std::back_inserter(records));
-    }
-    return std::make_shared<TableResult>(header, records);
+    return std::make_shared<TableResult>(header, plan->All());
 }
 
 std::shared_ptr<Result> DBSystem::Insert(TableID table_id, RecordList &records) {

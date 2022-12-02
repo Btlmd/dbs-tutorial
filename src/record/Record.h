@@ -60,6 +60,10 @@ public:
     [[nodiscard]] std::vector<std::string> ToString() const {
         std::vector<std::string> buffer;
         for (const auto &field: fields) {
+            if (!field) {
+                buffer.emplace_back("<nullptr>");
+                continue;
+            }
             if (field->is_null) {
                 buffer.emplace_back("NULL");
             } else {
@@ -69,6 +73,7 @@ public:
         return std::move(buffer);
     }
 
+#ifdef DEBUG
     /**
      * Return a string representation of the record
      * Used for debugging log
@@ -77,6 +82,7 @@ public:
     [[nodiscard]] std::string Repr() const {
         return "(" + boost::algorithm::join(ToString(), ", ") + ")";
     }
+#endif
 };
 
 #endif //DBS_TUTORIAL_RECORD_H

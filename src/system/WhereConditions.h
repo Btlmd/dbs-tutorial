@@ -8,6 +8,7 @@
 #include <defines.h>
 #include <record/Field.h>
 #include <record/Record.h>
+#include <exception/OperationException.h>
 
 #include <memory>
 #include <utility>
@@ -116,18 +117,23 @@ public:
     }
 };
 
+typedef std::vector<std::shared_ptr<Field>> ValueList;
+
 /**
  * Check whether the field value match any of the given list of values
  */
 class ValueInListCondition : public FilterCondition {
 public:
-    const std::vector<std::shared_ptr<Field>> value_list;
+    const ValueList value_list;
     const FieldID field_position;
 
-    ValueInListCondition(std::vector<std::shared_ptr<Field>> value_list, TableID table_id, FieldID pos) :
+    ValueInListCondition(ValueList value_list, TableID table_id, FieldID pos) :
             FilterCondition{table_id}, value_list{std::move(value_list)}, field_position{pos} {}
 
     bool operator()(const std::shared_ptr<Record> &record) const override {
+        if (value_list.size() == 0) {
+            return false;
+        }
         EqCmp comparer;
         const auto &record_field{record->fields[field_position]};
         return std::ranges::any_of(value_list.cbegin(), value_list.cend(),
@@ -222,6 +228,63 @@ public:
     }
 };
 
+typedef std::pair<std::vector<std::string>, std::shared_ptr<OpNode>> SelectPlan;
+
+inline ValueList ToValueList(const SelectPlan &select_plan) {
+    if (select_plan.first.size() != 1) {
+        throw OperationError{"Operand should contain only 1 column"};
+    }
+    auto records = select_plan.second->All();
+
+    ValueList value_list;
+    for (const auto &record: records) {
+        assert(record->fields.size() == 1);
+        value_list.push_back(std::move(record->fields[0]));
+    }
+    return std::move(value_list);
+}
+
+/**
+ * In subquery condition
+ */
+class InSubQueryCondition : public ValueInListCondition {
+public:
+    InSubQueryCondition(const SelectPlan &select_plan, TableID table_id, FieldID pos) :
+            ValueInListCondition{ToValueList(select_plan), table_id, pos} {}
+};
+
+/**
+ * Equal to subquery condition
+ */
+class EqualToSubQueryCondition : public FilterCondition {
+public:
+    FieldID field_position;
+    std::shared_ptr<Field> value;
+
+    EqualToSubQueryCondition(const SelectPlan &select_plan, TableID table_id, FieldID pos) :
+            FilterCondition{table_id}, field_position{pos} {
+        auto value_list{ToValueList(select_plan)};
+        if (value_list.size() > 1) {
+            throw OperationError{"Subquery returns more than 1 row"};
+        }
+        if (value_list.size() == 1) {
+            value = value_list[0];
+        } else {
+            value = nullptr;
+        }
+    }
+
+    bool operator()(const std::shared_ptr<Record> &record) const override {
+        if (value == nullptr) {
+            return false;
+        }
+        EqCmp comparer;
+        const auto &record_field{record->fields[field_position]};
+        return comparer(record_field, value);
+    }
+
+};
+
 typedef std::pair<TableID, TableID> JoinPair;
 typedef std::tuple<FieldID, FieldID, std::shared_ptr<Cmp>> JoinCond;
 
@@ -238,7 +301,6 @@ inline JoinPair make_ordered(const JoinPair &original) {
     return std::make_pair(original.second, original.first);
 }
 
-
 /**
  * Record Join Condition, with conjunct comparers (since disjunction is not yet supported in the grammar)
  */
@@ -248,7 +310,8 @@ public:
     std::vector<JoinCond> conditions;
 
     explicit JoinCondition(std::vector<JoinCond> conditions, JoinPair tables) :
-            Condition{ConditionType::JOIN}, conditions{std::move(conditions)}, tables{std::move(make_ordered(tables))} {}
+            Condition{ConditionType::JOIN}, conditions{std::move(conditions)},
+            tables{std::move(make_ordered(tables))} {}
 
     bool operator()(const std::shared_ptr<Record> &lhs, const std::shared_ptr<Record> &rhs) const {
         return std::ranges::all_of(conditions.begin(), conditions.end(), [&lhs, &rhs](const auto &cond) {
@@ -257,7 +320,7 @@ public:
     }
 
     void Swap() {
-        for (auto&[lhs, rhs, _]: conditions) {
+        for (auto &[lhs, rhs, _]: conditions) {
             std::swap(lhs, rhs);
         }
         std::swap(tables.first, tables.second);
@@ -271,16 +334,16 @@ public:
     }
 
     static void Merge(std::shared_ptr<JoinCondition> &dst, const std::shared_ptr<JoinCondition> &other) {
-        if (dst != other){
+        if (dst != other) {
             assert(dst->tables == other->tables);
             std::copy(other->conditions.cbegin(), other->conditions.cend(), std::back_inserter(dst->conditions));
         }
     }
 
     static std::shared_ptr<JoinCondition> Merge(const std::vector<std::shared_ptr<JoinCondition>> &conditions) {
-        assert(conditions.size() > 0);
+        assert(!conditions.empty());
         auto ret{std::make_shared<JoinCondition>(std::vector<JoinCond>{}, conditions[0]->tables)};
-        for (const auto& cond: conditions) {
+        for (const auto &cond: conditions) {
             Merge(ret, cond);
         }
         return std::move(ret);

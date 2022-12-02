@@ -135,6 +135,7 @@ int main() {
             if (batch.find(';') == std::string::npos) {
                 continue;
             }
+            std::cout << buffer << std::endl;
             process_input(buffer, visitor);
             std::cout << std::endl;
             buffer.clear();

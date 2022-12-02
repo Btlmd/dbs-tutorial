@@ -20,6 +20,18 @@ public:
     virtual ~OpNode() = default;
 
     virtual RecordList Next() = 0;
+
+    virtual RecordList All() {
+        RecordList records;
+        while (true) {
+            RecordList ret{Next()};
+            if (ret.empty()) {
+                break;
+            }
+            std::move(ret.begin(), ret.end(), std::back_inserter(records));
+        }
+        return std::move(records);
+    }
 };
 
 
