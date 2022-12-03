@@ -61,7 +61,7 @@ target_link_libraries(front main_shared)
 add_executable(debug src/debug.cpp)
 target_link_libraries(debug main_shared)
 
-#FIND_PACKAGE(PythonInterp)
+FIND_PACKAGE(PythonInterp)
 FIND_PACKAGE(Boost COMPONENTS python${PYTHON_VERSION_SUFFIX})
 FIND_PACKAGE(PythonInterp 3)
 FIND_PACKAGE(PythonLibs 3 REQUIRED)
@@ -85,11 +85,11 @@ execute_process(COMMAND ${PROJECT_SOURCE_DIR}/utils/generate_sql_tests.sh )
 file(COPY tests/python/compare.py DESTINATION ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
 
 file(GLOB_RECURSE files ${PROJECT_SOURCE_DIR}/tests/sql/*.sql)
-add_test(NAME python-version COMMAND python3.9 --version)
+add_test(NAME python-version COMMAND python --version)
 foreach(file ${files})
     get_filename_component(file_name ${file} NAME)
     message(" > ADD TEST ${file_name}")
-    add_test(NAME ${file_name} COMMAND python3.9 ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/compare.py --host localhost --user root --password root --sql ${file})
+    add_test(NAME ${file_name} COMMAND python ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/compare.py --host localhost --user root --password root --sql ${file})
 endforeach()
 
 ## unit tests
