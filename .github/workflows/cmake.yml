@@ -26,11 +26,9 @@ jobs:
         mysql version: '8.0'
         mysql root password: 'root'
 
-    - name: Configure Python 3.9
-      run: |
-        sudo apt-get -y purge python3.8
-        sudo apt-get -y autoremove
-        sudo apt install python3.9
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
 
     - name: System Info
       run: |
