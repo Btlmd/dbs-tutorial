@@ -38,7 +38,7 @@ endif()
 list(APPEND LIBS cpp-terminal antlr4-runtime fmt Boost::log_setup Boost::log)
 
 # Generate grammar CPP files
-#execute_process(COMMAND ${PROJECT_SOURCE_DIR}/utils/generate_grammar.sh)
+execute_process(COMMAND ${PROJECT_SOURCE_DIR}/utils/generate_grammar.sh)
 
 # Project source
 file(GLOB_RECURSE dbms_source src/**/*.cpp)
@@ -65,7 +65,7 @@ FIND_PACKAGE(PythonInterp)
 FIND_PACKAGE(Boost COMPONENTS python${PYTHON_VERSION_SUFFIX})
 FIND_PACKAGE(PythonInterp 3)
 FIND_PACKAGE(PythonLibs 3 REQUIRED)
-#
+
 message(STATUS "PYTHON_LIBRARIES = ${PYTHON_LIBRARIES}")
 message(STATUS "PYTHON_EXECUTABLE = ${PYTHON_EXECUTABLE}")
 message(STATUS "PYTHON_INCLUDE_DIRS = ${PYTHON_INCLUDE_DIRS}")
