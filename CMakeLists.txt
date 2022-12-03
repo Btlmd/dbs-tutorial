@@ -111,7 +111,7 @@ message(STATUS "Boost_LIBRARIES = ${Boost_LIBRARIES}")
 # `connect_db` target
 python_add_module(connect_db tests/python_utils/connect.cpp)
 target_include_directories(connect_db PUBLIC ${Boost_INCLUDE_DIRS} ${PYTHON_INCLUDE_DIRS})
-target_link_libraries(connect_db main ${Boost_LIBRARIES} ${PYTHON_LIBRARIES})
+target_link_libraries(connect_db main_shared ${Boost_LIBRARIES} ${PYTHON_LIBRARIES})
 
 # tests
 enable_testing()

@@ -36,6 +36,7 @@ jobs:
 
     - name: Configure Dependencies
       run: |
+        sudo apt-get install python3-dev
         sudo apt-get install libboost-all-dev
         pip install "conan<2.0"
         conan profile new default --detect
