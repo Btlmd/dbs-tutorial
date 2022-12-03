@@ -19,15 +19,35 @@ public:
 
     virtual ~OpNode() = default;
 
+    /**
+     * Return true if no more results will be produced
+     * @return
+     */
+    [[nodiscard]] virtual bool Over() const = 0;
+
+    /**
+     * Reset the node, so that it produces records from the very beginning
+     */
+    virtual void Reset() {
+        for (auto &ch: children) {
+            ch->Reset();
+        }
+    }
+
+    /**
+     * Produce a set of records
+     * @return
+     */
     virtual RecordList Next() = 0;
 
+    /**
+     * Produce all records
+     * @return
+     */
     virtual RecordList All() {
         RecordList records;
-        while (true) {
+        while (!Over()) {
             RecordList ret{Next()};
-            if (ret.empty()) {
-                break;
-            }
             std::move(ret.begin(), ret.end(), std::back_inserter(records));
         }
         return std::move(records);

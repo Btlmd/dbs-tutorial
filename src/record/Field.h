@@ -119,7 +119,7 @@ public:
     }
 
     [[nodiscard]] std::string ToString() const override {
-        return std::to_string(value);
+        return fmt::format("{:.3f}", value);
     }
 
     void Write(uint8_t *&dst) const override {

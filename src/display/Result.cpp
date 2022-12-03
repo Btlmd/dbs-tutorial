@@ -18,7 +18,7 @@ std::string TextResult::ToString() {
 }
 
 TableResult::TableResult(std::vector<std::string> headers, const RecordList &record_list) :
-        headers{std::move(headers)}, table{nullptr} {
+        headers{std::move(headers)}, table{nullptr}, record_list{std::make_shared<RecordList>(record_list)} {
     for (const auto &record: record_list) {
         records.emplace_back(record->ToString());
     }

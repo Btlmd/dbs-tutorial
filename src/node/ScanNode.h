@@ -19,11 +19,18 @@ public:
                                         current_page{-1},
                                         data_fd{page_file}, meta{std::move(table_meta)} {}
 
+    void Reset() override {
+        OpNode::Reset();
+        current_page = -1;
+    }
+
+    [[nodiscard]] bool Over() const override {
+        assert(current_page < meta->data_page_count);
+        return current_page == meta->data_page_count - 1;
+    }
+
     RecordList Next() override {
         ++current_page;
-        if (current_page == meta->data_page_count) {
-            return {};
-        }
         auto page = buffer.ReadPage(data_fd, current_page);
         DataPage dp{page, *meta};
         RecordList ret;
@@ -41,7 +48,7 @@ public:
 private:
     BufferSystem &buffer;
     const std::shared_ptr<const TableMeta> meta;
-    std::shared_ptr<FilterCondition> condition;
+    const std::shared_ptr<FilterCondition> condition;
     PageID current_page;
     FileID data_fd;
 };

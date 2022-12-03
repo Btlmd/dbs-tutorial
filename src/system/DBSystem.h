@@ -36,8 +36,9 @@ public:
     std::shared_ptr<Result> ShowDatabases() const;
 
 
-    std::shared_ptr<Result> CreateTable(const std::string &table_name, const std::vector<std::shared_ptr<FieldMeta>> &field_meta,
-                        std::optional<RawPrimaryKey> raw_pk, const std::vector<RawForeignKey> &raw_fks);
+    std::shared_ptr<Result>
+    CreateTable(const std::string &table_name, const std::vector<std::shared_ptr<FieldMeta>> &field_meta,
+                std::optional<RawPrimaryKey> raw_pk, const std::vector<RawForeignKey> &raw_fks);
 
     std::shared_ptr<Result> DropTable(const std::string &table_name);
 
@@ -80,14 +81,18 @@ public:
      * @param records
      * @return
      */
-    std::shared_ptr<Result> Insert(TableID table_id, RecordList& records);
+    std::shared_ptr<Result> Insert(TableID table_id, RecordList &records);
+
+    std::shared_ptr<Result>
+    Update(TableID table_id, const std::vector<std::pair<std::shared_ptr<FieldMeta>, std::shared_ptr<Field>>> &updates,
+           const std::shared_ptr<FilterCondition> &cond);
 
     /**
      * Validate that the record satisfies all constraints specified by `meta`
      * @param meta
      * @param record
      */
-    void CheckConstraint(const TableMeta& meta, const std::shared_ptr<Record> &record) const;
+    void CheckConstraint(const TableMeta &meta, const std::shared_ptr<Record> &record) const;
 
     /**
      * Get a const pointer to TableMeta of the specific table
@@ -189,6 +194,8 @@ private:
      * Throw exception if no database is selected
      */
     void CheckOnUse() const;
+
+    void InsertRecord(TableID table_id, const std::shared_ptr<Record> &record);
 
 };
 

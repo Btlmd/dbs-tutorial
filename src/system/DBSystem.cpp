@@ -433,22 +433,20 @@ std::shared_ptr<Result> DBSystem::Select(const std::vector<std::string> &header,
 
 std::shared_ptr<Result> DBSystem::Insert(TableID table_id, RecordList &records) {
     for (const auto &record: records) {
-        auto page_to_insert{FindPageWithSpace(table_id, record->Size())};
-        page_to_insert->Insert(record);
-        // TODO: update all indexes
+        InsertRecord(table_id, record);
     }
     return std::make_shared<TextResult>(fmt::format("{} record(s) inserted", records.size()));
 }
 
-std::shared_ptr<Result> DBSystem::Delete(TableID table_id, const std::shared_ptr<FilterCondition> &cond){
+std::shared_ptr<Result> DBSystem::Delete(TableID table_id, const std::shared_ptr<FilterCondition> &cond) {
     assert(cond != nullptr);
     auto data_fd{table_data_fd[table_id]};
     std::size_t delete_counter{0};
-    for(PageID i{0}; i < meta_map[table_id]->data_page_count; ++i) {
+    for (PageID i{0}; i < meta_map[table_id]->data_page_count; ++i) {
         auto page = buffer.ReadPage(data_fd, i);
         DataPage dp{page, *meta_map[table_id]};
         RecordList ret;
-        for (FieldID j{0}; j< dp.header.slot_count; ++j) {
+        for (FieldID j{0}; j < dp.header.slot_count; ++j) {
             auto record{dp.Select(j)};
             if (record != nullptr && (*cond)(record)) {
                 ++delete_counter;
@@ -465,4 +463,37 @@ void DBSystem::CheckOnUse() const {
     if (!on_use) {
         throw OperationError{"No database selected"};
     }
+}
+
+std::shared_ptr<Result>
+DBSystem::Update(TableID table_id, const std::vector<std::pair<std::shared_ptr<FieldMeta>,
+        std::shared_ptr<Field>>> &updates, const std::shared_ptr<FilterCondition> &cond) {
+    auto data_fd{table_data_fd[table_id]};
+    std::size_t update_counter{0};
+    for (PageID i{0}; i < meta_map[table_id]->data_page_count; ++i) {
+        auto page = buffer.ReadPage(data_fd, i);
+        DataPage dp{page, *meta_map[table_id]};
+        RecordList ret;
+        for (FieldID j{0}; j < dp.header.slot_count; ++j) {
+            auto record{dp.Select(j)};
+            if (record != nullptr && (*cond)(record)) {
+                ++update_counter;
+                auto original_size{record->Size()};
+                record->Update(updates);
+                if (record->Size() > original_size) {
+                    dp.Delete(j);
+                    InsertRecord(table_id, record);
+                } else {  // in-place update
+                    dp.Update(j, record);
+                }
+                // TODO: update entries in index
+            }
+        }
+    }
+    return std::make_shared<TextResult>(fmt::format("{} record(s) updated", update_counter));
+}
+
+void DBSystem::InsertRecord(TableID table_id, const std::shared_ptr<Record> &record) {
+    auto page_to_insert{FindPageWithSpace(table_id, record->Size())};
+    page_to_insert->Insert(record);
 }

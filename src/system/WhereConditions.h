@@ -332,7 +332,12 @@ public:
 
     explicit JoinCondition(std::vector<JoinCond> conditions, JoinPair tables) :
             Condition{ConditionType::JOIN}, conditions{std::move(conditions)},
-            tables{std::move(tables)} {}
+            tables{std::move(tables)} {
+        DebugLog << "Join Condition on tables (" << this->tables.first << ", "<< this->tables.second << ")";
+        for (const auto&[l, r, cond]: this->conditions) {
+            DebugLog << " - (" << l << ", " << r << ")";
+        }
+    }
 
     bool operator()(const std::shared_ptr<Record> &lhs, const std::shared_ptr<Record> &rhs) const {
         return std::ranges::all_of(conditions.begin(), conditions.end(), [&lhs, &rhs](const auto &cond) {
@@ -363,12 +368,12 @@ public:
     }
 
     static std::shared_ptr<JoinCondition>
-    Merge(const std::vector<std::shared_ptr<JoinCondition>> &conditions) {
-        auto ret{std::make_shared<JoinCondition>(std::vector<JoinCond>{}, JoinPair{-1, -1})};
+    Merge(const std::vector<std::shared_ptr<JoinCondition>> &conditions, const JoinPair& tables) {
+        std::vector<JoinCond> accu;
         for (const auto &cond: conditions) {
-            Merge(ret, cond);
+            std::copy(cond->conditions.begin(), cond->conditions.end(), std::back_inserter(accu));
         }
-        return std::move(ret);
+        return std::make_shared<JoinCondition>(std::move(accu), tables);
     }
 };
 

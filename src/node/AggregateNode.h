@@ -29,7 +29,7 @@ public:
      * Returns true if there is at least one not NULL value
      * @return
      */
-    bool SomeToAggregate(RecordList::iterator begin, RecordList::iterator end, FieldID i) const {
+    [[nodiscard]] bool SomeToAggregate(RecordList::iterator begin, RecordList::iterator end, FieldID i) const {
         for (auto ptr{begin}; ptr != end; ++ptr) {
             if ((*ptr)->fields[target[i]] && !(*ptr)->fields[target[i]]->is_null) {
                 return true;
@@ -38,10 +38,15 @@ public:
         return false;
     }
 
+    void Reset() override {
+        aggregated = false;
+    }
+
+    [[nodiscard]] bool Over() const override {
+        return aggregated;
+    }
+
     RecordList Next() override {
-        if (aggregated) {
-            return {};
-        }
         aggregated = true;
 
         // sort downstream records
@@ -137,9 +142,11 @@ public:
                         ag.push_back(typed);
                         break;
                     case ColumnType::AVG:
-                        if (!some || (col->field_meta->type != FieldType::INT &&
-                                      col->field_meta->type != FieldType::FLOAT)) {
+                        if (!some) {
                             ag.push_back(typed);
+                        } else if (col->field_meta->type != FieldType::INT &&
+                                   col->field_meta->type != FieldType::FLOAT) {
+                            ag.push_back(std::make_shared<Int>(0));
                         } else {
                             double sum{0};
                             int count{0};
@@ -161,9 +168,11 @@ public:
                         }
                         break;
                     case ColumnType::SUM:
-                        if (!some || (col->field_meta->type != FieldType::INT &&
-                                      col->field_meta->type != FieldType::FLOAT)) {
+                        if (!some) {
                             ag.push_back(typed);
+                        } else if (col->field_meta->type != FieldType::INT &&
+                                   col->field_meta->type != FieldType::FLOAT) {
+                            ag.push_back(std::make_shared<Int>(0));
                         } else {
                             if (col->field_meta->type == FieldType::INT) {
                                 int sum{0};

@@ -4,11 +4,14 @@
 # build directories
 cmake-build-debug
 build
+databases
 
 # auto generated files
 src/grammar/*
 !src/grammar/SQL.g4
+tests/sql/gen_*.sql
 
 # scratch file
 const_lut.h
-wordlist.txt
+compare.sh
+*.log

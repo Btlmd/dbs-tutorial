@@ -29,7 +29,7 @@ protected:
 class TableResult : public Result {
 public:
     TableResult(std::vector<std::string> headers, std::vector<std::vector<std::string>> rows) :
-            headers{std::move(headers)}, records{std::move(rows)}, table{nullptr} {}
+            headers{std::move(headers)}, records{std::move(rows)}, table{nullptr}, record_list{nullptr} {}
 
     TableResult(std::vector<std::string> headers, const RecordList &record_list);
 
@@ -41,6 +41,7 @@ public:
 
     std::vector<std::string> headers;
     std::vector<std::vector<std::string>> records;
+    std::shared_ptr<RecordList> record_list;
     std::shared_ptr<tabulate::Table> table;
 };
 

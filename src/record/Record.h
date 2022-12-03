@@ -46,11 +46,17 @@ public:
      * @return
      */
     RecordSize Size() {
-        auto size{static_cast<RecordSize>((fields.size() + 7) / 8)};  // offset of null bitmap
-        for (const auto &f: fields) {
-            size += f->Size();
+        if (size > 0) {
+            return size;
         }
-        return size;
+        auto _size{static_cast<RecordSize>((fields.size() + 7) / 8)};  // offset of null bitmap
+        for (const auto &f: fields) {
+            if (!f->is_null) {
+                _size += f->Size();
+            }
+        }
+        size = _size;
+        return _size;
     }
 
     /**
@@ -73,7 +79,20 @@ public:
         return std::move(buffer);
     }
 
+    /**
+     * Update specified fields of a record
+     * @param updates
+     */
+    void Update(const std::vector<std::pair<std::shared_ptr<FieldMeta>, std::shared_ptr<Field>>> &updates) {
+        for (const auto&[field_meta, field_value]: updates) {
+            assert(field_meta->field_id < fields.size());
+            fields[field_meta->field_id] = field_value;
+        }
+        size = -1;
+    }
+
 #ifdef DEBUG
+
     /**
      * Return a string representation of the record
      * Used for debugging log
@@ -82,7 +101,10 @@ public:
     [[nodiscard]] std::string Repr() const {
         return "(" + boost::algorithm::join(ToString(), ", ") + ")";
     }
+
 #endif
+private:
+    RecordSize size{-1};
 };
 
 #endif //DBS_TUTORIAL_RECORD_H

@@ -1,0 +1,2 @@
+pymysql
+conan<2.0

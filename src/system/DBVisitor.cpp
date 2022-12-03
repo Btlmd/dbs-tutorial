@@ -17,6 +17,9 @@
 
 #include <magic_enum.hpp>
 
+#include <boost/range/adaptor/transformed.hpp>
+#include <boost/algorithm/string/join.hpp>
+
 #include <chrono>
 #include <memory>
 #include <tuple>
@@ -219,8 +222,12 @@ antlrcpp::Any DBVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) 
 
     for (const auto &ident_ctx: ctx->identifiers()->Identifier()) {
         auto table_id{system.GetTableID(ident_ctx->getText())};
-            selected_tables.push_back(table_id);  // `selected_tables` follows the original order of user input
+        selected_tables.push_back(table_id);  // `selected_tables` follows the original order of user input
     }
+
+    DebugLog << "Selected tables" << boost::algorithm::join(
+                selected_tables | boost::adaptors::transformed(static_cast<std::string(*)(TableID)>(std::to_string)),
+                ", ");
 
     std::multimap<TableID, std::shared_ptr<FilterCondition>> filters;
     std::multimap<JoinPair, std::shared_ptr<JoinCondition>> joins;
@@ -285,8 +292,8 @@ antlrcpp::Any DBVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) 
                     join_conds_i.push_back(it->second);
                 }
             }
-            auto join_cond{JoinCondition::Merge(join_conds_i)};
-            join_root = std::make_shared<JoinNode>(join_root, table_scanners[i], join_cond);
+            auto join_cond{JoinCondition::Merge(join_conds_i, JoinPair{-1, selected_tables[i]})};
+            join_root = std::make_shared<JoinNode>(join_root, table_scanners[selected_tables[i]], join_cond);
         }
         root = join_root;
     } else {  // connect scan node directly
@@ -640,4 +647,61 @@ void DBVisitor::strip_quote(std::string &possibly_quoted) {
     if (*end == '\'') {
         possibly_quoted.erase(end);
     }
+}
+
+
+antlrcpp::Any DBVisitor::visitUpdate_table(SQLParser::Update_tableContext *ctx) {
+    auto table_name{ctx->Identifier()->getText()};
+    auto table_id{system.GetTableID(table_name)};
+
+    selected_tables_stack.push({});
+    auto &selected_tables{selected_tables_stack.top()};
+
+    selected_tables.clear();
+    selected_tables.push_back(table_id);
+
+    auto updates{ctx->set_clause()->accept(this)
+                         .as<std::vector<std::pair<std::shared_ptr<FieldMeta>, std::shared_ptr<Field>>>>()};
+
+    auto table_tree_any{ctx->where_and_clause()->accept(this)};
+    auto &[filters, joins]{
+            table_tree_any.as<
+                    std::pair<
+                            std::multimap<TableID, std::shared_ptr<FilterCondition>>,
+                            std::multimap<JoinPair, std::shared_ptr<JoinCondition>>
+                    >
+            >()
+    };
+    assert(joins.empty());
+    assert(filters.count(table_id) == filters.size());
+
+    FilterConditionList filter_list;
+    for (const auto &[_, cond]: filters) {
+        filter_list.push_back(cond);
+    }
+    auto and_cond{std::make_shared<AndCondition>(std::move(filter_list), table_id)};
+
+    selected_tables_stack.pop();
+
+    return system.Update(table_id, updates, and_cond);
+}
+
+antlrcpp::Any DBVisitor::visitSet_clause(SQLParser::Set_clauseContext *ctx) {
+    assert(ctx->Identifier().size() == ctx->value().size());
+    auto tables{selected_tables_stack.top()};
+    assert(tables.size() == 1);
+    auto table_id{tables[0]};
+    const auto &meta{system.GetTableMeta(table_id)};
+    std::vector<std::pair<std::shared_ptr<FieldMeta>, std::shared_ptr<Field>>> updates;
+    for (FieldID i{0}; i < ctx->Identifier().size(); ++i) {
+        auto field_name{ctx->Identifier(i)->getText()};
+        const auto field_meta{meta->field_meta.ToMeta<OperationError>(
+                field_name,
+                "Table `{}` does not have column `{}`",
+                meta->table_name,
+                field_name
+        )};
+        updates.emplace_back(field_meta, GetValue(ctx->value(i), field_meta, false));
+    }
+    return updates;
 }

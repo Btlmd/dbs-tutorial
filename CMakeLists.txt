@@ -43,10 +43,10 @@ list(APPEND LIBS cpp-terminal antlr4-runtime fmt Boost::log_setup Boost::log)
 # Project source
 file(GLOB_RECURSE dbms_source src/**/*.cpp)
 
-# `main` static library
-add_library(main STATIC ${dbms_source})
-target_link_libraries(main ${LIBS})
-target_include_directories(main PUBLIC src)
+## `main` static library
+#add_library(main STATIC ${dbms_source})
+#target_link_libraries(main ${LIBS})
+#target_include_directories(main PUBLIC src)
 
 # `main` shared library
 add_library(main_shared SHARED ${dbms_source})
@@ -55,54 +55,17 @@ target_include_directories(main_shared PUBLIC src)
 
 # `front` target
 add_executable(front src/main.cpp)
-target_link_libraries(front main)
+target_link_libraries(front main_shared)
 
 # `debug` target
 add_executable(debug src/debug.cpp)
-target_link_libraries(debug main)
+target_link_libraries(debug main_shared)
 
-# Boost.Python
+#FIND_PACKAGE(PythonInterp)
 FIND_PACKAGE(Boost COMPONENTS python${PYTHON_VERSION_SUFFIX})
 FIND_PACKAGE(PythonInterp 3)
 FIND_PACKAGE(PythonLibs 3 REQUIRED)
-message(STATUS "PYTHON_LIBRARIES = ${PYTHON_LIBRARIES}")
-message(STATUS "PYTHON_EXECUTABLE = ${PYTHON_EXECUTABLE}")
-message(STATUS "PYTHON_INCLUDE_DIRS = ${PYTHON_INCLUDE_DIRS}")
-message(STATUS "Boost_LIBRARIES = ${Boost_LIBRARIES}")
-
-# `connect` target
-python_add_module(connect tests/python_utils/connect.cpp)
-target_include_directories(connect PUBLIC ${Boost_INCLUDE_DIRS} ${PYTHON_INCLUDE_DIRS})
-target_link_libraries(connect ${Boost_LIBRARIES} ${PYTHON_LIBRARIES} main)
-
-FIND_PACKAGE(PythonInterp)
-
-if (PYTHONINTERP_FOUND)
-    if (UNIX AND NOT APPLE)
-        if (PYTHON_VERSION_MAJOR EQUAL 3)
-            FIND_PACKAGE(Boost COMPONENTS python${PYTHON_VERSION_SUFFIX})
-            FIND_PACKAGE(PythonInterp 3)
-            FIND_PACKAGE(PythonLibs 3 REQUIRED)
-        else()
-            FIND_PACKAGE(Boost COMPONENTS python)
-            FIND_PACKAGE(PythonInterp)
-            FIND_PACKAGE(PythonLibs REQUIRED)
-        endif()
-    else()
-        if (PYTHON_VERSION_MAJOR EQUAL 3)
-            FIND_PACKAGE(Boost COMPONENTS python${PYTHON_VERSION_MAJOR}${PYTHON_VERSION_MINOR})
-            FIND_PACKAGE(PythonInterp 3)
-            FIND_PACKAGE(PythonLibs 3 REQUIRED)
-        else()
-            FIND_PACKAGE(Boost COMPONENTS python${PYTHON_VERSION_MAJOR}${PYTHON_VERSION_MINOR})
-            FIND_PACKAGE(PythonInterp)
-            FIND_PACKAGE(PythonLibs REQUIRED)
-        endif()
-    endif()
-else()
-    message("Python not found")
-endif()
-
+#
 message(STATUS "PYTHON_LIBRARIES = ${PYTHON_LIBRARIES}")
 message(STATUS "PYTHON_EXECUTABLE = ${PYTHON_EXECUTABLE}")
 message(STATUS "PYTHON_INCLUDE_DIRS = ${PYTHON_INCLUDE_DIRS}")
@@ -115,12 +78,26 @@ target_link_libraries(connect_db main_shared ${Boost_LIBRARIES} ${PYTHON_LIBRARI
 
 # tests
 enable_testing()
-find_package(GTest REQUIRED COMPONENTS gtest_main)
-function(GTEST TEST_NAME)
-    add_executable(${TEST_NAME} tests/${TEST_NAME}.cpp)
-    target_link_libraries(${TEST_NAME} ${LIBS} GTest::gtest_main)
-    gtest_discover_tests(${TEST_NAME})
-endfunction()
 
-# test cases
-GTEST(basic)
+# generate sql
+execute_process(COMMAND ${PROJECT_SOURCE_DIR}/utils/generate_sql_tests.sh )
+
+file(COPY tests/python/compare.py DESTINATION ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
+
+file(GLOB_RECURSE files ${PROJECT_SOURCE_DIR}/tests/sql/*.sql)
+add_test(NAME python-version COMMAND python3.9 --version)
+foreach(file ${files})
+    get_filename_component(file_name ${file} NAME)
+    message(" > ADD TEST ${file_name}")
+    add_test(NAME ${file_name} COMMAND python3.9 ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/compare.py --host localhost --user root --password root --sql ${file})
+endforeach()
+
+## unit tests
+#find_package(GTest REQUIRED COMPONENTS gtest_main)
+#function(GTEST TEST_NAME)
+#    add_executable(${TEST_NAME} tests/${TEST_NAME}.cpp)
+#    target_link_libraries(${TEST_NAME} main_shared GTest::gtest_main)
+#    gtest_discover_tests(${TEST_NAME})
+#endfunction()
+#
+#GTEST(basic)

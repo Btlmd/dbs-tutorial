@@ -58,51 +58,26 @@ if __name__ == "__main__":
     INSERT INTO crafted VALUES (18, NULL, NULL, 'jfhgfa'), (8, NULL, 'rgqh', 'yqiihqq'), (3, NULL, 'ergr', NULL), (NULL, NULL, 'string', 'halo');
     
 {}
-    INSERT INTO info VALUES (10, 1, 'hello', 'world', 20);
-
-    SELECT * FROM info;
-    SELECT * FROM info2;
-    SELECT * FROM info3;
-    SELECT * FROM info4;
-    SELECT * FROM info5;
-    
-
     SELECT * FROM info WHERE info.C5 IN (SELECT crafted.A FROM crafted);
     SELECT * FROM info WHERE info.C5 IN (SELECT crafted.A FROM crafted) AND info.C1 = (SELECT MAX(info2.D4) FROM info2);
-    SELECT MAX(info.C1) FROM info WHERE info.C1 <> (
-        SELECT MAX(info.C1) FROM info WHERE info.C1 <> (
-            SELECT MAX(info.C1) FROM info WHERE info.C1 <> (
-                SELECT MAX(info.C1) FROM info WHERE info.C1 <> (
-                    SELECT MAX(info.C1) FROM info WHERE info.C1 <> (
-                        SELECT MAX(info.C1) FROM info WHERE info.C1 <> (
-                            SELECT MAX(info.C1) FROM info
-                        )
-                    )
-                )
-            )
-        )
-    );
     
-    SELECT * FROM info WHERE info.C1 < info.C5 AND info.C2 > 50 AND info.C5 > 20;
-    SELECT * FROM info WHERE info.C3 LIKE '%e_e%';
-    SELECT * FROM info WHERE info.C4 LIKE '%e_e%';
     
-    SELECT * FROM info WHERE info.C1 = 10;
-    SELECT * FROM info WHERE info.C2 = 0;
-    SELECT * FROM info WHERE info.C3 = 'hello';
-    SELECT * FROM info WHERE info.C4 = 'world';
+    SELECT * FROM info, info2, info3, info4, info5 WHERE info.C1 = info2.D4 AND info2.D4 = info3.E4 AND info3.E4 = info4.F4 AND info4.F4 = info5.G4;
+    SELECT * FROM info, info2, info3, info4, info5 WHERE info.C1 = info2.D4 AND info2.D4 = info3.E4 AND info3.E4 = info4.F4 AND info4.F4 = info5.G4 AND info.C2 < 30 AND info2.D3 > 50;
     
-    UPDATE info SET C1 = 1000, C2 = 5, C3 = 'sel1', C4 = 'sel2', C5 = 255 WHERE info.C5 = 10;
+    SELECT info.C5, info2.D1, info.C3, info3.E2, info.C3, info4.F4, info.C2, info5.G4 FROM info, info2, info3, info4, info5
+    WHERE info.C1 = info2.D4 AND info2.D4 = info3.E4 AND info5.G1 < 70 AND info2.D4 > 10 AND info3.E2 LIKE '%e_e%';
     
-    SELECT * FROM info;
+    SELECT * FROM info, info2;
     
-    DELETE FROM info WHERE info.C5 = 10;
+    DELETE FROM info2 WHERE info2.D4 > 10;
     
-    SELECT * FROM info;
+    SELECT * FROM info, info2;
     
-    DELETE FROM info WHERE info.C5 = 11;
+    DELETE FROM info2 WHERE info2.D4 <= 10;
     
-    SELECT * FROM info;
+    SELECT * FROM info, info2;
+
     """
 
     insert_sql = ""

@@ -73,6 +73,10 @@ public:
 
     antlrcpp::Any visitDelete_from_table(SQLParser::Delete_from_tableContext *ctx) override;
 
+    antlrcpp::Any visitUpdate_table(SQLParser::Update_tableContext *ctx) override;
+
+    antlrcpp::Any visitSet_clause(SQLParser::Set_clauseContext *ctx) override;
+
 };
 
 

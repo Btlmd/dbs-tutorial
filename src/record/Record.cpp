@@ -18,7 +18,9 @@ void Record::Write(uint8_t *&dst) {
     }
     nulls.Write(dst);
     for (const auto& field: fields) {
-        field->Write(dst);
+        if (!field->is_null) {  // skip null records
+            field->Write(dst);
+        }
     }
 }
 
@@ -31,6 +33,7 @@ std::shared_ptr<Record> Record::FromSrc(const uint8_t *&src, const TableMeta &me
         const auto& field{meta.field_meta.meta[i]};
         if (nulls->Get(i)) {
             fields.push_back(Field::MakeNull(field->type, field->max_size));
+            // null read is skipped
         } else {
             fields.push_back(Field::LoadField(field->type, src, field->max_size));
         }

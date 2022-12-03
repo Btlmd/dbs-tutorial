@@ -16,6 +16,10 @@ public:
     ProjectNode(std::shared_ptr<OpNode> downstream, std::vector<FieldID> target):
         OpNode{{std::move(downstream)}}, target{std::move(target)} {}
 
+    [[nodiscard]] bool Over() const override {
+        return children[0]->Over();
+    }
+
     RecordList Next() override {
         // NOTE: `target` may contain duplicate entries
         RecordList downstream{children[0]->Next()};

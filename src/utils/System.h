@@ -72,6 +72,7 @@ void inline process_input(const std::string &in_string, DBVisitor &visitor) {
         auto result_list{ToResultList(in_string, visitor)};
         for (auto &result_ptr: result_list) {
             std::cout << result_ptr->ToString() << std::endl;
+            std::cout.flush();
         }
     } catch (const OperationError &e) {
         std::cout << e.what() << std::endl;
