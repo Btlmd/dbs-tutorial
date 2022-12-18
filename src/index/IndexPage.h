@@ -7,27 +7,27 @@
 
 #include <defines.h>
 #include <io/BufferSystem.h>
+#include <index/IndexRecord.h>
 #include <index/IndexMeta.h>
 
 /*
  ** Index Page Layout (Leaf)
  * | PageHeader |
- * | Record <0> | Record <1> | ... | Record <n-1> |
- * where Record <i> == (PageID <i>, SlotID <i>, Key <i>)
+ * | IndexRecord <0> | IndexRecord <1> | ... | IndexRecord <n-1> |
+ * where IndexRecord <i> == (PageID <i>, SlotID <i>, Key <i>)
  *
  * Index Page Layout (Internal)
  * | PageHeader |
- * | Record <0> | Record <1> | ... | Record <n-1> |
- * where Record <i> == (PageID <i>, Key <i>)
+ * | IndexRecord <0> | IndexRecord <1> | ... | IndexRecord <n-1> |
+ * where IndexRecord <i> == (PageID <i>, Key <i>)
  *
  * For every internal node <j>, we ensure that all elements in the subtree rooted at <j>
  * are less than or equal to Key <j>.
  */
 
-
-
 class IndexPage {
     class PageHeader {
+       public:
         bool is_leaf;
         TreeOrder child_cnt;
         // Neighbors and parents. Returns -1 if not exist.
@@ -41,6 +41,23 @@ class IndexPage {
 
     explicit IndexPage(Page *_page, const IndexMeta& _meta) : header{*reinterpret_cast<PageHeader *>(_page->data)},
                                                      page{_page}, meta{_meta} {}
+
+    [[nodiscard]] std::shared_ptr<IndexRecord> Select(TreeOrder slot) const;
+    TreeOrder Insert(std::shared_ptr<IndexRecord> record);
+    void Delete(TreeOrder slot_id);
+
+    void Init() {
+        header.child_cnt = 0;
+        header.is_leaf = true;
+        header.prev_page = -1;
+        header.nxt_page = -1;
+        header.parent_page = -1;
+    }
+
+    RecordSize IndexRecordSize() const {
+        return meta.Size(header.is_leaf);
+    }
+
 };
 
 #endif  // DBS_TUTORIAL_INDEXPAGE_H

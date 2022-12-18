@@ -6,9 +6,11 @@
 #define DBS_TUTORIAL_INDEXFIELD_H
 
 #include "defines.h"
+#include <exception/OperationException.h>
 #include <record/Field.h>
 
 enum IndexFieldType {
+    INVALID,
     INT,
     INT2  // std::pair<INT, INT>, joint indexing
 };
@@ -35,6 +37,8 @@ class IndexField {
     // For internal nodes
     static std::shared_ptr<IndexField> LoadIndexFieldShort(IndexFieldType type, const uint8_t *&src);
     virtual void WriteShort(uint8_t *&dst) const = 0;
+
+    static std::shared_ptr<IndexField> MakeNull(IndexFieldType type);
 };
 
 
@@ -94,8 +98,8 @@ class IndexINT : public IndexField {
         write_var(dst, is_null);
     }
 
-    [[nodiscard]] RecordSize ShortSize() const override {return sizeof(value) + sizeof(is_null);}
-    [[nodiscard]] RecordSize Size() const override {return sizeof(value) + sizeof(is_null);}
+    [[nodiscard]] virtual RecordSize ShortSize() const override {return sizeof(value) + sizeof(is_null);}
+    [[nodiscard]] virtual RecordSize Size() const override {return sizeof(value) + sizeof(is_null);}
 };
 
 class IndexINT2 : public IndexField {
@@ -178,8 +182,8 @@ class IndexINT2 : public IndexField {
         write_var(dst, is_null1);
     }
 
-    [[nodiscard]] RecordSize ShortSize() const override {return sizeof(value1) + sizeof(is_null1);}
-    [[nodiscard]] RecordSize Size() const override {return (sizeof(value1) + sizeof(is_null1)) * 2;}
+    [[nodiscard]] virtual RecordSize ShortSize() const override {return sizeof(value1) + sizeof(is_null1);}
+    [[nodiscard]] virtual RecordSize Size() const override {return (sizeof(value1) + sizeof(is_null1)) * 2;}
 };
 
 #endif  // DBS_TUTORIAL_INDEXFIELD_H

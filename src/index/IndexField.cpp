@@ -25,3 +25,14 @@ inline std::shared_ptr<IndexField> IndexField::LoadIndexFieldShort(IndexFieldTyp
             assert(false);
     }
 }
+
+inline std::shared_ptr<IndexField> IndexField::MakeNull(IndexFieldType _type) {
+    switch (_type) {
+        case IndexFieldType::INT:
+            return std::make_shared<IndexINT>(0, true);
+        case IndexFieldType::INT2:
+            return std::make_shared<IndexINT2>(0, true, 0, true);
+        default:
+            assert(false);
+    }
+}
