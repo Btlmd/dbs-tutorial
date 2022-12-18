@@ -10,6 +10,7 @@
 #include <record/Record.h>
 
 void DataPage::Contiguous() {
+    // TODO: relation with indexing?
     uint8_t *data_ptr{page->data + sizeof(PageHeader)};
     auto slot_ptr{FooterSlot(0)};
     for (SlotID i{0}; i < header.slot_count; ++i) {
@@ -42,6 +43,7 @@ void DataPage::Update(SlotID slot, std::shared_ptr<Record> record) {
 
 void DataPage::Delete(SlotID slot) {
     *FooterSlot(slot) = -1;
+    // TODO: Free space manage?
     page->SetDirty();
 }
 

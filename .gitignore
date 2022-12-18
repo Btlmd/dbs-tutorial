@@ -15,3 +15,5 @@ tests/sql/gen_*.sql
 const_lut.h
 compare.sh
 *.log
+
+utils/cmake*

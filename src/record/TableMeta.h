@@ -18,19 +18,19 @@
 #include <io/BufferSystem.h>
 #include <exception/OperationException.h>
 
-class FieldMeteTable {
+class FieldMetaTable {  // TODO: typo
 public:
     std::unordered_map<std::string, FieldID> name_id;
     std::vector<std::shared_ptr<FieldMeta>> meta;
 
-    explicit FieldMeteTable(std::vector<std::shared_ptr<FieldMeta>> field_meta) {
+    explicit FieldMetaTable(std::vector<std::shared_ptr<FieldMeta>> field_meta) {
         for (const auto &fm: field_meta) {
             name_id.insert({fm->name, fm->field_id});
         }
         meta = std::move(field_meta);
     }
 
-    FieldMeteTable() = default;
+    FieldMetaTable() = default;
 
     FieldID Count() const {
         assert(name_id.size() == meta.size());
@@ -72,7 +72,7 @@ public:
     TableID table_id{-1};
     PageID data_page_count{-1};
     std::string table_name;
-    FieldMeteTable field_meta;
+    FieldMetaTable field_meta;
     std::shared_ptr<PrimaryKey> primary_key{nullptr};
     std::vector<std::shared_ptr<ForeignKey>> foreign_keys;
 
@@ -83,7 +83,7 @@ public:
 
     static std::shared_ptr<TableMeta> FromSrc(FileID fd, BufferSystem &buffer);
 
-    TableMeta(TableID table_id, std::string table_name, PageID page_count, FieldMeteTable field_meta, FileID fd,
+    TableMeta(TableID table_id, std::string table_name, PageID page_count, FieldMetaTable field_meta, FileID fd,
               BufferSystem &buffer)
             : table_id{table_id}, table_name{std::move(table_name)}, fd{fd}, data_page_count{page_count},
               field_meta{std::move(field_meta)}, buffer{buffer} {}

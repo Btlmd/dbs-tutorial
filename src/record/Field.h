@@ -279,7 +279,12 @@ public:
     std::shared_ptr<Field> default_value{nullptr};
 
     [[nodiscard]] RecordSize Size() const {
-        return sizeof(FieldMeta) - sizeof(std::string) + sizeof(std::size_t) + name.size();
+        RecordSize base_size = sizeof(type) + name.size() + sizeof(RecordSize) + sizeof(max_size)
+                             + sizeof(unique) + sizeof(not_null) + sizeof(has_default);
+        if (has_default) {
+            base_size += default_value->Size();
+        }
+        return base_size;
     }
 
     static std::shared_ptr<FieldMeta> FromSrc(const uint8_t *&src) {

@@ -172,7 +172,7 @@ DBSystem::CreateTable(const std::string &table_name, const std::vector<std::shar
      * Refactored: field position and field id is just the same
      * So field deletion should update all possible foreign keys in the database
      */
-    auto meta{std::make_shared<TableMeta>(table_id, table_name, 0, FieldMeteTable{field_meta}, table_meta_fd[table_id],
+    auto meta{std::make_shared<TableMeta>(table_id, table_name, 0, FieldMetaTable{field_meta}, table_meta_fd[table_id],
                                           buffer)};
 
     // primary key and foreign keys
@@ -198,7 +198,7 @@ DBSystem::CreateTable(const std::string &table_name, const std::vector<std::shar
 }
 
 std::shared_ptr<Result> DBSystem::DropTable(const std::string &table_name) {
-
+    // TODO: ??
 }
 
 std::shared_ptr<Result> DBSystem::ShowTables() const {

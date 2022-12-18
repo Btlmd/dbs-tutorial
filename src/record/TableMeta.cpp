@@ -69,9 +69,13 @@ std::shared_ptr<TableMeta> TableMeta::FromSrc(FileID fd, BufferSystem &buffer) {
     FieldID field_loaded{0};
     while (field_loaded < field_count) {
         NextPage();
-        for (FieldID j{0}; j < FK_PER_PAGE && field_loaded < field_count; ++j) {
+
+        FieldID pg_field_meta_cnt;
+        read_var(src, pg_field_meta_cnt);
+
+        for (FieldID j{0}; j < pg_field_meta_cnt; ++j) {
             ret->field_meta.Insert(FieldMeta::FromSrc(src));
-            ++fk_loaded;
+            ++field_loaded;
         }
     }
 
@@ -91,6 +95,7 @@ void TableMeta::Write() {
         dst = page->data;
         page_end = page->data + PAGE_SIZE;
     }};
+
 
     // Fixed Info
     NextPage();
@@ -118,6 +123,7 @@ void TableMeta::Write() {
         uint8_t *header{page->data};
         write_var(header, fields_written);  // mark written field count
     }};
+
     auto TurnNewPage{[&]() {
         NextPage();
         dst += sizeof(fields_written);  // skip field_count
