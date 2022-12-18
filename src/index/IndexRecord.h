@@ -2,9 +2,6 @@
 // Created by c7w on 2022/12/18.
 //
 
-// TODO : redo
-
-
 #ifndef DBS_TUTORIAL_INDEXRECORD_H
 #define DBS_TUTORIAL_INDEXRECORD_H
 
@@ -14,6 +11,8 @@
 
 class IndexRecord {
    public:
+    IndexField* key;
+    PageID page_id;
     static std::shared_ptr<IndexRecord> FromSrc(const uint8_t *&src, const IndexMeta& meta, bool is_leaf);
     virtual void Write(uint8_t *&dst) const = 0;
     virtual RecordSize Size() const = 0;
@@ -21,9 +20,6 @@ class IndexRecord {
 
 class IndexRecordInternal : public IndexRecord {
 public:
-    PageID page_id;
-    IndexField* key;
-
     explicit IndexRecordInternal(PageID page_id, IndexField* key) : page_id{page_id}, key{key} {}
 
     static std::shared_ptr<IndexRecordInternal> FromSrc(const uint8_t *&src, const IndexMeta &meta) {
@@ -44,10 +40,7 @@ public:
 
 class IndexRecordLeaf : public IndexRecord {
 public:
-    PageID page_id;
     SlotID slot_id;
-    IndexField* key;
-
     explicit IndexRecordLeaf(PageID page_id, SlotID slot_id, IndexField* key)
                                         : page_id{page_id}, slot_id{slot_id}, key{key} {}
 

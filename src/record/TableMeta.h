@@ -18,7 +18,7 @@
 #include <io/BufferSystem.h>
 #include <exception/OperationException.h>
 
-class FieldMetaTable {  // TODO: typo
+class FieldMetaTable {
 public:
     std::unordered_map<std::string, FieldID> name_id;
     std::vector<std::shared_ptr<FieldMeta>> meta;

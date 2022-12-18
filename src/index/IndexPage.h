@@ -26,6 +26,7 @@
  */
 
 class IndexPage {
+   public:
     class PageHeader {
        public:
         bool is_leaf;
@@ -39,11 +40,12 @@ class IndexPage {
     Page* page;
     const IndexMeta &meta;
 
+
     explicit IndexPage(Page *_page, const IndexMeta& _meta) : header{*reinterpret_cast<PageHeader *>(_page->data)},
                                                      page{_page}, meta{_meta} {}
 
     [[nodiscard]] std::shared_ptr<IndexRecord> Select(TreeOrder slot) const;
-    TreeOrder Insert(std::shared_ptr<IndexRecord> record);
+    TreeOrder Insert(TreeOrder slot, std::shared_ptr<IndexRecord> record);
     void Delete(TreeOrder slot_id);
 
     void Init() {
@@ -56,6 +58,46 @@ class IndexPage {
 
     RecordSize IndexRecordSize() const {
         return meta.Size(header.is_leaf);
+    }
+
+    bool IsLeaf() const {
+        return header.is_leaf;
+    }
+
+    TreeOrder ChildCount() const {
+        return header.child_cnt;
+    }
+
+    void SetChildCount(TreeOrder cnt) {
+        header.child_cnt = cnt;
+    }
+
+    PageID PrevPage() const {
+            return header.prev_page;
+    }
+
+    void SetPrevPage(PageID page_id) {
+        header.prev_page = page_id;
+    }
+
+    PageID NextPage() const {
+        return header.nxt_page;
+    }
+
+    void SetNextPage(PageID page_id) {
+        header.nxt_page = page_id;
+    }
+
+    PageID ParentPage() const {
+        return header.parent_page;
+    }
+
+    void SetParentPage(PageID page_id) {
+        header.parent_page = page_id;
+    }
+
+    bool IsOverflow() {
+        return header.child_cnt > meta.m;
     }
 
 };

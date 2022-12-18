@@ -58,7 +58,7 @@ add_executable(front src/main.cpp)
 target_link_libraries(front main_shared)
 
 # `debug` target
-add_executable(debug src/debug.cpp src/index/BPlusTree.cpp src/index/BPlusTree.h src/index/IndexPage.cpp src/index/IndexPage.h src/index/IndexMeta.cpp src/index/IndexMeta.h src/index/IndexRecord.cpp src/index/IndexRecord.h src/index/IndexField.cpp src/index/IndexField.h)
+add_executable(debug src/debug.cpp src/index/IndexPage.cpp src/index/IndexPage.h src/index/IndexMeta.cpp src/index/IndexMeta.h src/index/IndexRecord.cpp src/index/IndexRecord.h src/index/IndexField.cpp src/index/IndexField.h src/index/IndexFile.cpp src/index/IndexFile.h)
 target_link_libraries(debug main_shared)
 
 FIND_PACKAGE(PythonInterp)

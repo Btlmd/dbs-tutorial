@@ -11,15 +11,21 @@ std::shared_ptr<IndexRecord> IndexPage::Select(TreeOrder slot) const {
     return IndexRecord::FromSrc(src, meta, header.is_leaf);
 }
 
-TreeOrder IndexPage::Insert(std::shared_ptr<IndexRecord> record) {
+TreeOrder IndexPage::Insert(TreeOrder slot, std::shared_ptr<IndexRecord> record) {
     assert (header.child_cnt < meta.m);
-    auto base_offset = sizeof(IndexPage::PageHeader);
-    auto offset = base_offset + header.child_cnt * IndexRecordSize();
+
+    auto offset = sizeof(IndexPage::PageHeader) + slot * IndexRecordSize();
+    auto size = (ChildCount() - slot) * IndexRecordSize();
+    auto base = page->data;
+    memmove(base + offset + IndexRecordSize(), base + offset, size);
+
     uint8_t *dst = page->data + offset;
     record->Write(dst);
     page->SetDirty();
+
     return header.child_cnt++;
 }
+
 
 void IndexPage::Delete(TreeOrder slot_id) {
     assert (slot_id < header.child_cnt);

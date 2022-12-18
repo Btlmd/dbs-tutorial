@@ -7,6 +7,7 @@
 
 #include <defines.h>
 #include <index/IndexField.h>
+#include <index/IndexRecord.h>
 
 class IndexMeta {
 public:
@@ -51,6 +52,7 @@ public:
         read_var(src, _field_type);
         return std::make_shared<IndexMeta>(_m, _page_num, _root_page, _field_type);
     }
+
 
 };
 
