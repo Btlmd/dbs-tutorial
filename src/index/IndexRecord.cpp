@@ -23,10 +23,12 @@ std::shared_ptr<IndexRecordInternal> IndexRecordInternal::FromSrc(const uint8_t 
 
 
 std::shared_ptr<IndexRecordLeaf> IndexRecordLeaf::FromSrc(const uint8_t *&src, const IndexMeta &meta) {
+    auto former_src = src;
     PageID page_id;
     read_var(src, page_id);
     SlotID slot_id;
     read_var(src, slot_id);
     auto key = IndexField::LoadIndexField(meta.field_type, src);
+    // TraceLog << fmt::format("Read {} bytes.", src - former_src);
     return std::make_shared<IndexRecordLeaf>(page_id, slot_id, key);
 }

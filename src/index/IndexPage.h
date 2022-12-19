@@ -122,20 +122,20 @@ class IndexPage {
     }
 
     void Print() {  // Used for debugging
-        TraceLog << fmt::format("<Page {:03d}>[{}][↑{:03d}][←{:03d}][→{:03d}] ", page->id, IsLeaf() ? "L" : "I",
+        DebugLog << fmt::format("<Page {:03d}>[{}][↑{:03d}][←{:03d}][→{:03d}] ", page->id, IsLeaf() ? "L" : "I",
                                 ParentPage(), PrevPage(), NextPage());
         for (TreeOrder i = 0; i < ChildCount(); ++i) {
             auto record = Select(i);
             record = CastRecord(record);
             if (IsLeaf()) {
                 auto record2 = std::dynamic_pointer_cast<IndexRecordLeaf>(record);
-                TraceLog << fmt::format("        <Page {:03d} Slot {:08d} Key {}> ", record2->page_id, record2->slot_id,
+                DebugLog << fmt::format("        <Page {:03d} Slot {:08d} Key {}> ", record2->page_id, record2->slot_id,
                                         record2->key->ToString());
             } else {
-                TraceLog << fmt::format("        <Page {:03d} Key {}> ", record->page_id, record->key->ToString());
+                DebugLog << fmt::format("        <Page {:03d} Key {}> ", record->page_id, record->key->ToString());
             }
         }
-        TraceLog << std::endl;
+        DebugLog << std::endl;
     }
 
 };

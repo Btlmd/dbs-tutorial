@@ -26,7 +26,7 @@ class IndexFile {
 
     explicit IndexFile(BufferSystem& buffer, FileID fd) : buffer{buffer}, fd{fd} {
         // Read Page 0
-        Page* page = buffer.ReadPage(fd, 0);
+        class Page* page = buffer.ReadPage(fd, 0);
         const uint8_t *src = page->data;
         read_var(src, table_id);
         meta = IndexMeta::FromSrc(src);
@@ -42,7 +42,7 @@ class IndexFile {
 
     ~IndexFile() {
         // Write back Page 0
-        Page* page = buffer.CreatePage(fd, 0);
+        class Page* page = buffer.CreatePage(fd, 0);
         uint8_t *dst = page->data;
         write_var(dst, table_id);
         meta->Write(dst);
@@ -95,16 +95,21 @@ class IndexFile {
         }
     }
 
+    std::shared_ptr<IndexPage> Page(PageID page_id) {
+        auto page = buffer.ReadPage(fd, page_id);
+        return std::make_shared<IndexPage>(page, *meta);
+    }
+
    private:
     BufferSystem &buffer;
     FileID fd{};
 
     // Find k that curr_page is the k-th child of parent_page
-    static TreeOrder Find(const std::shared_ptr<IndexPage>& parent_page, const std::shared_ptr<IndexPage>& curr_page) {
-        auto child_cnt = parent_page->ChildCount();
+    TreeOrder Find(PageID parent_page_id, PageID curr_page_id) {
+        auto child_cnt = Page(parent_page_id)->ChildCount();
         for (TreeOrder i = 0; i < child_cnt; ++i) {
-            auto entry = parent_page->Select(i);
-            if (entry->page_id == curr_page->page->id) {
+            auto entry = Page(parent_page_id)->Select(i);
+            if (entry->page_id == Page(curr_page_id)->page->id) {
                 return i;
             }
         }
@@ -112,22 +117,22 @@ class IndexFile {
     }
 
     // Split the page into two pages
-    void Split(const std::shared_ptr<IndexPage>& curr_page, const std::shared_ptr<IndexPage>& new_page) {
-        auto child_cnt = curr_page->ChildCount();
-        auto mid = child_cnt / 2;
-        for (TreeOrder i = child_cnt - 1; i >= mid; ++i) {
-            auto entry = curr_page->Select(i);
-            new_page->Insert(i - mid, entry);
-            curr_page->Delete(i);
+    void Split(PageID curr_page_id, PageID new_page_id) {
+        auto child_cnt = Page(curr_page_id)->ChildCount();
+        TreeOrder mid = child_cnt / 2;
+
+        Page(new_page_id)->SetChildCount(child_cnt - mid);
+        for (TreeOrder i = child_cnt - 1; i >= mid; --i) {
+            auto entry = Page(curr_page_id)->Select(i);
+            Page(new_page_id)->Update(i - mid, entry);
+            Page(curr_page_id)->Delete(i);
         }
 
         // Update parent of children
-        if (!new_page->IsLeaf()) {
-            for (TreeOrder i = 0; i < new_page->ChildCount(); ++i) {
-                auto entry = new_page->Select(i);
-                auto child_page = std::make_shared<IndexPage>(
-                    buffer.ReadPage(fd, entry->page_id), *meta);
-                child_page->SetParentPage(new_page->page->id);
+        if (!Page(new_page_id)->IsLeaf()) {
+            for (TreeOrder i = 0; i < Page(new_page_id)->ChildCount(); ++i) {
+                auto entry = Page(new_page_id)->Select(i);
+                Page(entry->page_id)->SetParentPage(Page(new_page_id)->page->id);
             }
         }
     }

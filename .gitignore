@@ -18,3 +18,4 @@ compare.sh
 
 utils/cmake*
 **/__pycache__/**
+**/cmake-3.25.0-rc4-linux-x86_64/**

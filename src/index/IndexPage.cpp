@@ -22,6 +22,7 @@ TreeOrder IndexPage::Insert(TreeOrder slot, std::shared_ptr<IndexRecord> record)
     uint8_t *dst = page->data + offset;
 
     record = CastRecord(record);  // Decide use internal writing pattern or leaf writing pattern
+    assert (record != nullptr);
     record->Write(dst);
 
     page->SetDirty();

@@ -45,9 +45,11 @@ public:
     static std::shared_ptr<IndexRecordLeaf> FromSrc(const uint8_t *&src, const IndexMeta &meta);
 
     virtual void Write(uint8_t *&dst) const override {
+        auto former_dst = dst;
         write_var(dst, page_id);
         write_var(dst, slot_id);
         key->Write(dst);
+        // TraceLog << fmt::format("Write {} bytes, start from {:08x}.", dst - former_dst, (uint64_t)former_dst);
     }
 
     virtual RecordSize Size() const override { return sizeof(PageID) + sizeof(SlotID) + key->Size(); }

@@ -7,10 +7,13 @@
 RecordSize IndexMeta::Size(bool is_leaf) const {
     // Construct a null object of field_type
     auto null_field{IndexField::MakeNull(field_type)};
-    // Return its size
+
+    // Return the size of index record
     if (is_leaf) {
-        return null_field->Size();
+        auto index_record = std::make_shared<IndexRecordLeaf>(0, 0, null_field);
+        return index_record->Size();
     } else {
-        return null_field->ShortSize();
+        auto index_record = std::make_shared<IndexRecordInternal>(0, null_field);
+        return index_record->Size();
     }
 }
