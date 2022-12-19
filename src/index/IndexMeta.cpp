@@ -3,3 +3,14 @@
 //
 
 #include "IndexMeta.h"
+
+RecordSize IndexMeta::Size(bool is_leaf) const {
+    // Construct a null object of field_type
+    auto null_field{IndexField::MakeNull(field_type)};
+    // Return its size
+    if (is_leaf) {
+        return null_field->Size();
+    } else {
+        return null_field->ShortSize();
+    }
+}

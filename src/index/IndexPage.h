@@ -23,6 +23,8 @@
  *
  * For every internal node <j>, we ensure that all elements in the subtree rooted at <j>
  * are less than or equal to Key <j>.
+ *
+ * The methods of IndexPage act like a vector. ()
  */
 
 class IndexPage {
@@ -44,13 +46,16 @@ class IndexPage {
     explicit IndexPage(Page *_page, const IndexMeta& _meta) : header{*reinterpret_cast<PageHeader *>(_page->data)},
                                                      page{_page}, meta{_meta} {}
 
+    /* Start: Manipulation methods */
     [[nodiscard]] std::shared_ptr<IndexRecord> Select(TreeOrder slot) const;
     TreeOrder Insert(TreeOrder slot, std::shared_ptr<IndexRecord> record);
+    void Update(TreeOrder slot, std::shared_ptr<IndexRecord> record);
     void Delete(TreeOrder slot_id);
+    /* End: Manipulation methods */
 
-    void Init() {
+    void Init(bool is_leaf) {
         header.child_cnt = 0;
-        header.is_leaf = true;
+        header.is_leaf = is_leaf;
         header.prev_page = -1;
         header.nxt_page = -1;
         header.parent_page = -1;
@@ -70,6 +75,7 @@ class IndexPage {
 
     void SetChildCount(TreeOrder cnt) {
         header.child_cnt = cnt;
+        page->SetDirty();
     }
 
     PageID PrevPage() const {
@@ -78,6 +84,7 @@ class IndexPage {
 
     void SetPrevPage(PageID page_id) {
         header.prev_page = page_id;
+        page->SetDirty();
     }
 
     PageID NextPage() const {
@@ -86,6 +93,7 @@ class IndexPage {
 
     void SetNextPage(PageID page_id) {
         header.nxt_page = page_id;
+        page->SetDirty();
     }
 
     PageID ParentPage() const {
@@ -94,10 +102,40 @@ class IndexPage {
 
     void SetParentPage(PageID page_id) {
         header.parent_page = page_id;
+        page->SetDirty();
     }
 
     bool IsOverflow() {
         return header.child_cnt > meta.m;
+    }
+
+    std::shared_ptr<IndexRecord> CastRecord(std::shared_ptr<IndexRecord> ptr) {
+        if (IsLeaf()) {
+            return std::dynamic_pointer_cast<IndexRecordLeaf>(ptr);
+        } else {
+            auto _ptr = std::dynamic_pointer_cast<IndexRecordInternal>(ptr);
+            if (_ptr) { return _ptr; }
+            else {
+                return std::dynamic_pointer_cast<IndexRecordLeaf>(ptr)->ToInternal();
+            }
+        }
+    }
+
+    void Print() {  // Used for debugging
+        TraceLog << fmt::format("<Page {:03d}>[{}][↑{:03d}][←{:03d}][→{:03d}] ", page->id, IsLeaf() ? "L" : "I",
+                                ParentPage(), PrevPage(), NextPage());
+        for (TreeOrder i = 0; i < ChildCount(); ++i) {
+            auto record = Select(i);
+            record = CastRecord(record);
+            if (IsLeaf()) {
+                auto record2 = std::dynamic_pointer_cast<IndexRecordLeaf>(record);
+                TraceLog << fmt::format("        <Page {:03d} Slot {:08d} Key {}> ", record2->page_id, record2->slot_id,
+                                        record2->key->ToString());
+            } else {
+                TraceLog << fmt::format("        <Page {:03d} Key {}> ", record->page_id, record->key->ToString());
+            }
+        }
+        TraceLog << std::endl;
     }
 
 };

@@ -9,6 +9,8 @@
 #include <index/IndexField.h>
 #include <index/IndexRecord.h>
 
+class IndexField;
+
 class IndexMeta {
 public:
     TreeOrder m;  // order of B+ tree,
@@ -21,16 +23,7 @@ public:
 
     IndexMeta() = default;
 
-    RecordSize Size(bool is_leaf) const {
-        // Construct a null object of field_type
-        auto null_field{IndexField::MakeNull(field_type)};
-        // Return its size
-        if (is_leaf) {
-            return null_field->Size();
-        } else {
-            return null_field->ShortSize();
-        }
-    }
+    RecordSize Size(bool is_leaf) const;
 
     // Serialize the meta into `dst` and move `dst` forward
     void Write(uint8_t *&dst) const {

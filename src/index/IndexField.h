@@ -30,6 +30,8 @@ class IndexField {
     [[nodiscard]] virtual RecordSize ShortSize() const = 0;
     [[nodiscard]] virtual RecordSize Size() const = 0;
 
+    virtual std::string ToString() const = 0;
+
     // For leaf nodes
     static std::shared_ptr<IndexField> LoadIndexField(IndexFieldType type, const uint8_t *&src);
     virtual void Write(uint8_t *&dst) const = 0;
@@ -86,6 +88,11 @@ class IndexINT : public IndexField {
         read_var(src, value);
         read_var(src, is_null);
         return std::make_shared<IndexINT>(value, is_null);
+    }
+
+    virtual std::string ToString() const override{
+        if (is_null) { return "NULL"; }
+        return fmt::format("{}", value);
     }
 
     void Write(uint8_t *&dst) const override {
@@ -151,6 +158,16 @@ class IndexINT2 : public IndexField {
         } else {
             return value1 == int_rhs.value1;
         }
+    }
+
+    virtual std::string ToString() const override{
+        std::string ret = "";
+        if (is_null1) { ret = ret + "NULL"; }
+        else { ret += fmt::format("{}", value1); }
+        ret += " ";
+        if (is_null2) { ret = ret + "NULL"; }
+        else { ret += fmt::format("{}", value2); }
+        return ret;
     }
 
     static std::shared_ptr<IndexINT2> FromSrc(const uint8_t *&src) {

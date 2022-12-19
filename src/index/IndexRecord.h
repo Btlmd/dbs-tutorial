@@ -9,9 +9,12 @@
 #include <index/IndexMeta.h>
 #include <index/IndexField.h>
 
+class IndexMeta;
+
 class IndexRecord {
    public:
-    IndexField* key;
+    explicit IndexRecord(PageID page_id, std::shared_ptr<IndexField> key) : page_id{page_id}, key{key} {}
+    std::shared_ptr<IndexField> key;
     PageID page_id;
     static std::shared_ptr<IndexRecord> FromSrc(const uint8_t *&src, const IndexMeta& meta, bool is_leaf);
     virtual void Write(uint8_t *&dst) const = 0;
@@ -20,14 +23,9 @@ class IndexRecord {
 
 class IndexRecordInternal : public IndexRecord {
 public:
-    explicit IndexRecordInternal(PageID page_id, IndexField* key) : page_id{page_id}, key{key} {}
+    explicit IndexRecordInternal(PageID page_id, std::shared_ptr<IndexField> key) : IndexRecord{page_id, key} {}
 
-    static std::shared_ptr<IndexRecordInternal> FromSrc(const uint8_t *&src, const IndexMeta &meta) {
-        PageID page_id;
-        read_var(src, page_id);
-        auto key = IndexField::LoadIndexFieldShort(meta.field_type, src);
-        return std::make_shared<IndexRecordInternal>(page_id, key.get());
-    }
+    static std::shared_ptr<IndexRecordInternal> FromSrc(const uint8_t *&src, const IndexMeta &meta);
 
     virtual void Write(uint8_t *&dst) const override {
         write_var(dst, page_id);
@@ -41,17 +39,10 @@ public:
 class IndexRecordLeaf : public IndexRecord {
 public:
     SlotID slot_id;
-    explicit IndexRecordLeaf(PageID page_id, SlotID slot_id, IndexField* key)
-                                        : page_id{page_id}, slot_id{slot_id}, key{key} {}
+    explicit IndexRecordLeaf(PageID page_id, SlotID slot_id, std::shared_ptr<IndexField> key)
+                                        : IndexRecord{page_id, key}, slot_id{slot_id} {}
 
-    static std::shared_ptr<IndexRecordLeaf> FromSrc(const uint8_t *&src, const IndexMeta &meta) {
-        PageID page_id;
-        read_var(src, page_id);
-        SlotID slot_id;
-        read_var(src, slot_id);
-        auto key = IndexField::LoadIndexField(meta.field_type, src);
-        return std::make_shared<IndexRecordLeaf>(page_id, slot_id, key.get());
-    }
+    static std::shared_ptr<IndexRecordLeaf> FromSrc(const uint8_t *&src, const IndexMeta &meta);
 
     virtual void Write(uint8_t *&dst) const override {
         write_var(dst, page_id);
@@ -60,6 +51,10 @@ public:
     }
 
     virtual RecordSize Size() const override { return sizeof(PageID) + sizeof(SlotID) + key->Size(); }
+
+    [[nodiscard]] std::shared_ptr<IndexRecordInternal> ToInternal() const {
+        return std::make_shared<IndexRecordInternal>(page_id, key);
+    }
 };
 
 #endif  // DBS_TUTORIAL_INDEXRECORD_H

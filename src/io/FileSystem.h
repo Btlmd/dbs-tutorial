@@ -26,7 +26,7 @@ public:
 
     static void CloseFile(FileID fd);
 
-    // page opertation
+    // page operation
 
     static void WritePage(FileID fd, PageID page_id, uint8_t *src);
 

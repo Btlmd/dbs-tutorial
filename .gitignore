@@ -17,3 +17,4 @@ compare.sh
 *.log
 
 utils/cmake*
+**/__pycache__/**

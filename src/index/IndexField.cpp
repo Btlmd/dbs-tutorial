@@ -4,7 +4,7 @@
 
 #include "IndexField.h"
 
-inline std::shared_ptr<IndexField> IndexField::LoadIndexField(IndexFieldType type, const uint8_t *&src) {
+std::shared_ptr<IndexField> IndexField::LoadIndexField(IndexFieldType type, const uint8_t *&src) {
     switch (type) {
         case IndexFieldType::INT:
             return IndexINT::FromSrc(src);
@@ -15,7 +15,7 @@ inline std::shared_ptr<IndexField> IndexField::LoadIndexField(IndexFieldType typ
     }
 }
 
-inline std::shared_ptr<IndexField> IndexField::LoadIndexFieldShort(IndexFieldType type, const uint8_t *&src) {
+std::shared_ptr<IndexField> IndexField::LoadIndexFieldShort(IndexFieldType type, const uint8_t *&src) {
     switch (type) {
         case IndexFieldType::INT:
             return IndexINT::FromSrcShort(src);
@@ -26,7 +26,7 @@ inline std::shared_ptr<IndexField> IndexField::LoadIndexFieldShort(IndexFieldTyp
     }
 }
 
-inline std::shared_ptr<IndexField> IndexField::MakeNull(IndexFieldType _type) {
+std::shared_ptr<IndexField> IndexField::MakeNull(IndexFieldType _type) {
     switch (_type) {
         case IndexFieldType::INT:
             return std::make_shared<IndexINT>(0, true);
