@@ -20,7 +20,8 @@ public:
     virtual std::string ToString() = 0;
     virtual ~Result() = default;
     virtual void SetRuntime(double runtime);
-    virtual void AddInfo(const std::string &info);
+    void AddInfo(const std::string &info, bool head = false);
+    std::string Display();
 protected:
     std::vector<std::string> infos;
     double runtime{-1};

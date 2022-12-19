@@ -93,17 +93,17 @@ antlrcpp::Any DBVisitor::visitCreate_table(SQLParser::Create_tableContext *ctx) 
                 max_size = max_len_raw;
             }
 
-            auto new_field_meta{std::make_shared<FieldMeta>(FieldMeta{
-                    .type{field_type},
-                    .name{field_name},
-                    .field_id{field_id_counter++},
+            auto new_field_meta{std::make_shared<FieldMeta>(
+                    field_type,
+                    field_name,
+                    field_id_counter++,
+                    max_size,
+                    false,
+                    not_null != nullptr,
+                    false,
+                    nullptr
+            )};
 
-                    .max_size{max_size},
-                    .unique{false},
-                    .not_null{not_null != nullptr},
-                    .has_default{false},
-                    .default_value{nullptr},
-            })};
 
             // default value config
             if (nf->value()) {
@@ -137,7 +137,7 @@ antlrcpp::Any DBVisitor::visitCreate_table(SQLParser::Create_tableContext *ctx) 
         auto pk{dynamic_cast<SQLParser::Primary_key_fieldContext *>(field_ctx)};
         if (pk) {
             if (raw_pk) {
-                throw OperationError{"Multiple primary key defined"};
+                throw OperationError{"Multiple primary keys defined"};
             }
             std::string pk_name;
             if (pk->Identifier()) {
@@ -159,7 +159,7 @@ antlrcpp::Any DBVisitor::visitCreate_table(SQLParser::Create_tableContext *ctx) 
 }
 
 antlrcpp::Any DBVisitor::visitDrop_table(SQLParser::Drop_tableContext *ctx) {
-    return SQLBaseVisitor::visitDrop_table(ctx);
+    return system.DropTable(ctx->Identifier()->getText());
 }
 
 antlrcpp::Any DBVisitor::visitField_list(SQLParser::Field_listContext *ctx) {
@@ -536,7 +536,9 @@ antlrcpp::Any DBVisitor::visitWhere_operator_select(SQLParser::Where_operator_se
     auto table_id{col->table_id};
     auto field_meta{col->field_meta};
     auto select_plan{ctx->select_table()->accept(this).as<SelectPlan>()};
-    return make_cond<EqualToSubQueryCondition>(select_plan, table_id, field_meta->field_id);
+    return make_cond<CompareSubQueryCondition>(
+            select_plan, table_id, field_meta->field_id, ConvertOperator(ctx->operator_())
+    );
 }
 
 antlrcpp::Any DBVisitor::visitWhere_null(SQLParser::Where_nullContext *ctx) {
@@ -704,4 +706,8 @@ antlrcpp::Any DBVisitor::visitSet_clause(SQLParser::Set_clauseContext *ctx) {
         updates.emplace_back(field_meta, GetValue(ctx->value(i), field_meta, false));
     }
     return updates;
+}
+
+antlrcpp::Any DBVisitor::visitShow_tables(SQLParser::Show_tablesContext *ctx) {
+    return system.ShowTables();
 }

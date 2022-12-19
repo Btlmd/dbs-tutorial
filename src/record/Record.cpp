@@ -10,6 +10,7 @@
 Record::Record(std::vector<std::shared_ptr<Field>> fields) : fields{std::move(fields)} {}
 
 void Record::Write(uint8_t *&dst) {
+    write_var(dst, Size());
     NullBitmap nulls{static_cast<FieldID>(fields.size())};
     for (int i{0}; i < fields.size(); ++i) {
         if (fields[i]->is_null) {
@@ -25,6 +26,8 @@ void Record::Write(uint8_t *&dst) {
 }
 
 std::shared_ptr<Record> Record::FromSrc(const uint8_t *&src, const TableMeta &meta) {
+    RecordSize read_size;
+    read_var(src, read_size);
     auto field_count{meta.field_meta.Count()};
     auto nulls = NullBitmap::FromSrc(src, field_count);
     std::vector<std::shared_ptr<Field>> fields;
@@ -38,5 +41,7 @@ std::shared_ptr<Record> Record::FromSrc(const uint8_t *&src, const TableMeta &me
             fields.push_back(Field::LoadField(field->type, src, field->max_size));
         }
     }
-    return std::make_shared<Record>(std::move(fields));
+    auto result{std::make_shared<Record>(std::move(fields))};
+    assert(result->Size() == read_size);
+    return result;
 }

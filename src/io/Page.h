@@ -9,7 +9,6 @@
 
 #include <cstdint>
 #include <utility>
-#
 
 struct BufferHash {
     std::size_t operator()(const std::pair<FileID, PageID> &id_pair) const {

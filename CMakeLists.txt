@@ -38,7 +38,7 @@ endif()
 list(APPEND LIBS cpp-terminal antlr4-runtime fmt Boost::log_setup Boost::log)
 
 # Generate grammar CPP files
-execute_process(COMMAND ${PROJECT_SOURCE_DIR}/utils/generate_grammar.sh)
+#execute_process(COMMAND ${PROJECT_SOURCE_DIR}/utils/generate_grammar.sh)
 
 # Project source
 file(GLOB_RECURSE dbms_source src/**/*.cpp)
@@ -85,19 +85,20 @@ execute_process(COMMAND ${PROJECT_SOURCE_DIR}/utils/generate_sql_tests.sh )
 file(COPY tests/python/compare.py DESTINATION ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
 
 file(GLOB_RECURSE files ${PROJECT_SOURCE_DIR}/tests/sql/*.sql)
-add_test(NAME python-version COMMAND python --version)
+add_test(NAME python-version COMMAND python3 --version)
 foreach(file ${files})
     get_filename_component(file_name ${file} NAME)
     message(" > ADD TEST ${file_name}")
-    add_test(NAME ${file_name} COMMAND python ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/compare.py --host localhost --user root --password root --sql ${file})
+    add_test(NAME ${file_name} COMMAND python3 ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/compare.py --host localhost --user root --password root --sql ${file})
 endforeach()
 
-## unit tests
-#find_package(GTest REQUIRED COMPONENTS gtest_main)
-#function(GTEST TEST_NAME)
-#    add_executable(${TEST_NAME} tests/${TEST_NAME}.cpp)
-#    target_link_libraries(${TEST_NAME} main_shared GTest::gtest_main)
-#    gtest_discover_tests(${TEST_NAME})
-#endfunction()
-#
-#GTEST(basic)
+# unit tests
+find_package(GTest REQUIRED COMPONENTS gtest_main)
+function(GTEST TEST_NAME)
+    add_executable(${TEST_NAME} tests/test_${TEST_NAME}.cpp)
+    target_link_libraries(${TEST_NAME} main_shared GTest::gtest_main)
+    gtest_discover_tests(${TEST_NAME})
+    message(" > ADD GTEST ${TEST_NAME}")
+endfunction()
+
+GTEST(data_page)

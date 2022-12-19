@@ -69,12 +69,12 @@ if __name__ == "__main__":
 
     SELECT * FROM info WHERE info.C5 IN (SELECT crafted.A FROM crafted);
     SELECT * FROM info WHERE info.C5 IN (SELECT crafted.A FROM crafted) AND info.C1 = (SELECT MAX(info2.D4) FROM info2);
-    SELECT MAX(info.C1) FROM info WHERE info.C1 <> (
-        SELECT MAX(info.C1) FROM info WHERE info.C1 <> (
-            SELECT MAX(info.C1) FROM info WHERE info.C1 <> (
-                SELECT MAX(info.C1) FROM info WHERE info.C1 <> (
-                    SELECT MAX(info.C1) FROM info WHERE info.C1 <> (
-                        SELECT MAX(info.C1) FROM info WHERE info.C1 <> (
+    SELECT MAX(info.C1) FROM info WHERE info.C1 < (
+        SELECT MAX(info.C1) FROM info WHERE info.C1 < (
+            SELECT MAX(info.C1) FROM info WHERE info.C1 < (
+                SELECT MAX(info.C1) FROM info WHERE info.C1 < (
+                    SELECT MAX(info.C1) FROM info WHERE info.C1 < (
+                        SELECT MAX(info.C1) FROM info WHERE info.C1 < (
                             SELECT MAX(info.C1) FROM info
                         )
                     )

@@ -16,7 +16,9 @@ void FileSystem::ReadPage(FileID fd, PageID page_id, uint8_t *dst) {
     ssize_t read_size = read(fd, dst, PAGE_SIZE);
     if (read_size != PAGE_SIZE) {
         throw FileSystemError{
-                "Expecting {} bytes for page read, got {} instead.",
+                "On reading @{} #{}; Expecting {} bytes for page read, got {} instead.",
+                fd,
+                page_id,
                 PAGE_SIZE,
                 read_size
         };
@@ -111,6 +113,11 @@ FileID FileSystem::NewFile(const std::string &path) {
     }
     TraceLog << "Create file " << path << " with FileID @" << fd;
     return fd;
+}
+
+void FileSystem::RemoveFile(const std::string &path) {
+    std::filesystem::remove(path);
+    TraceLog << "Remove file " << path;
 }
 
 

@@ -11,6 +11,7 @@
 #include <vector>
 #include <chrono>
 #include <ctime>
+#include <filesystem>
 
 #include <antlr4-runtime.h>
 #include <cpp-terminal/input.hpp>
@@ -71,7 +72,7 @@ void inline process_input(const std::string &in_string, DBVisitor &visitor) {
     try {
         auto result_list{ToResultList(in_string, visitor)};
         for (auto &result_ptr: result_list) {
-            std::cout << result_ptr->ToString() << std::endl;
+            std::cout << result_ptr->Display() << std::endl;
             std::cout.flush();
         }
     } catch (const OperationError &e) {
@@ -80,6 +81,10 @@ void inline process_input(const std::string &in_string, DBVisitor &visitor) {
 }
 
 void inline init_logger() {
+    if (!std::filesystem::is_directory("logs")) {
+        std::filesystem::create_directory("logs");
+    }
+
     boost::shared_ptr<logging::core> core = logging::core::get();
     typedef sinks::synchronous_sink<sinks::text_ostream_backend> sink_t;
 

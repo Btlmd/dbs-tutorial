@@ -22,6 +22,8 @@ public:
 
     static FileID NewFile(const std::string &);
 
+    static void RemoveFile(const std::string &);
+
     static FileID OpenFile(const std::string &);
 
     static void CloseFile(FileID fd);

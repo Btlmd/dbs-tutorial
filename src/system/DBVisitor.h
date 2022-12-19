@@ -77,6 +77,8 @@ public:
 
     antlrcpp::Any visitSet_clause(SQLParser::Set_clauseContext *ctx) override;
 
+    antlrcpp::Any visitShow_tables(SQLParser::Show_tablesContext *ctx) override;
+
 };
 
 

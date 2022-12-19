@@ -66,7 +66,6 @@ std::shared_ptr<Result> DBSystem::UseDatabase(const std::string &db_name) {
     /**
      * Table File Structure
      * {table_count}
-     * {next_table_id}
      * {table_id, table_name}
      * ...
      */
@@ -113,9 +112,20 @@ void DBSystem::CloseDatabase() {
 
     TraceLog << "Closing database " << current_database;
 
-    if (table_info_fd > 0) {
-        buffer.CloseFile(table_info_fd);
-        table_info_fd = -1;
+    // Update table_info
+    auto table_info_page = buffer.ReadPage(table_info_fd, 0);
+    uint8_t *table_info_ptr{table_info_page->data};
+    write_var(table_info_ptr, table_count);
+    for (const auto &[table_name, table_id]: table_name_map) {
+        write_var(table_info_ptr, table_id);
+        write_string(table_info_ptr, table_name);
+    }
+    table_info_page->SetDirty();
+
+    buffer.CloseFile(table_info_fd);
+
+    for (const auto &[table_id, table_meta]: meta_map) {
+        table_meta->Write();
     }
 
     // close file descriptors
@@ -130,6 +140,7 @@ void DBSystem::CloseDatabase() {
     table_name_map.clear();
     table_data_fd.clear();
     table_meta_fd.clear();
+    meta_map.clear();
 
     current_database = "";
     table_info_fd = -1;
@@ -172,36 +183,56 @@ DBSystem::CreateTable(const std::string &table_name, const std::vector<std::shar
      * Refactored: field position and field id is just the same
      * So field deletion should update all possible foreign keys in the database
      */
-    auto meta{std::make_shared<TableMeta>(table_id, table_name, 0, FieldMeteTable{field_meta}, table_meta_fd[table_id],
-                                          buffer)};
+    std::string meta_path{DB_DIR / current_database / fmt::format(TABLE_META_PATTERN, table_id)};
+    FileID meta_fd{FileSystem::NewFile(meta_path)};
+    std::shared_ptr<TableMeta> meta{nullptr};
 
-    // primary key and foreign keys
+    try {
+        meta = std::make_shared<TableMeta>(
+                table_id, table_name, 0, FieldMeteTable{field_meta}, meta_fd, buffer);
 
-    if (raw_pk) {
-        AddPrimaryKey(meta, raw_pk.value());
-    }
-
-    for (const auto &fk: raw_fks) {
-        AddForeignKey(meta, fk);
+        // primary key and foreign keys
+        if (raw_pk) {
+            AddPrimaryKey(meta, raw_pk.value());
+        }
+        for (const auto &fk: raw_fks) {
+            AddForeignKey(meta, fk);
+        }
+    } catch (std::exception &e) {
+        buffer.CloseFile(meta_fd);
+        FileSystem::RemoveFile(meta_path);
+        throw;
     }
 
     // if all previous step succeed, create table in DBSystem
 
     table_data_fd[table_id] = FileSystem::NewFile(
             DB_DIR / current_database / fmt::format(TABLE_DATA_PATTERN, table_id));
-    table_meta_fd[table_id] = FileSystem::NewFile(
-            DB_DIR / current_database / fmt::format(TABLE_META_PATTERN, table_id));
+    table_meta_fd[table_id] = meta_fd;
     table_name_map.insert({table_name, table_id});
+    assert(meta != nullptr);
     meta_map[table_id] = std::move(meta);
+    ++table_count;
 
     return std::shared_ptr<Result>{new TextResult{"Query OK"}};
 }
 
 std::shared_ptr<Result> DBSystem::DropTable(const std::string &table_name) {
-
+    auto table_id{GetTableID(table_name)};
+    buffer.CloseFile(table_meta_fd[table_id]);
+    buffer.CloseFile(table_data_fd[table_id]);
+    FileSystem::RemoveFile(DB_DIR / current_database / fmt::format(TABLE_DATA_PATTERN, table_id));
+    FileSystem::RemoveFile(DB_DIR / current_database / fmt::format(TABLE_META_PATTERN, table_id));
+    table_data_fd.erase(table_id);
+    table_meta_fd.erase(table_id);
+    meta_map.erase(table_id);
+    table_name_map.right.erase(table_id);
+    --table_count;
+    return std::make_shared<TextResult>("Query OK");
 }
 
 std::shared_ptr<Result> DBSystem::ShowTables() const {
+    CheckOnUse();
     std::vector<std::vector<std::string>> table_name_buffer;
     for (const auto &[name, tid]: table_name_map) {
         table_name_buffer.push_back({{name}});
@@ -384,7 +415,9 @@ std::shared_ptr<Result> DBSystem::DescribeTable(const std::string &table_name) {
     // unique constraints
     std::vector<std::string> unique_field_names;
     for (const auto &fm: table_meta->field_meta.meta) {
-        unique_field_names.push_back(fmt::format("UNIQUE ({});", fm->name));
+        if (fm->unique) {
+            unique_field_names.push_back(fmt::format("UNIQUE ({});", fm->name));
+        }
     }
     std::sort(unique_field_names.begin(), unique_field_names.end());
     std::for_each(unique_field_names.begin(), unique_field_names.end(),
@@ -497,3 +530,10 @@ void DBSystem::InsertRecord(TableID table_id, const std::shared_ptr<Record> &rec
     auto page_to_insert{FindPageWithSpace(table_id, record->Size())};
     page_to_insert->Insert(record);
 }
+
+//void DropAllDatabases() {
+//    for(const auto &db_name: databases) {
+//        DropDatabase(db_name);
+//    }
+//    assert(databases.size() == 0);
+//}

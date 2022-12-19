@@ -52,15 +52,30 @@ std::string TableResult::ToString() {
             table->row(record_len).format().border_top("").corner_top_left("").corner_top_right("");
         }
 
-        output = table->str() + "\n" + fmt::format("{} row(s) in set", records.size());
+        output = table->str();
+        AddInfo(fmt::format("{} row(s) in set", records.size()), true);
     }
-    return output + fmt::format(" ({:.2f} sec)", runtime);
+    return output;
 }
 
 void Result::SetRuntime(double _runtime) {
     runtime = _runtime;
 }
 
-void Result::AddInfo(const std::string &info) {
-    infos.push_back(info);
+void Result::AddInfo(const std::string &info, bool head) {
+    if (head) {
+        infos.insert(infos.begin(), info);
+    } else {
+        infos.push_back(info);
+    }
+}
+
+std::string Result::Display() {
+    std::string ret;
+    ret += ToString() + '\n';
+    for (const auto &info: infos) {
+        ret += info + '\n';
+    }
+    ret += fmt::format("({:.2f} sec)", runtime) + '\n';
+    return ret;
 }

@@ -37,7 +37,7 @@ public:
     const TableMeta &meta;
 
     explicit DataPage(Page *page, const TableMeta &table_meta) : header{*reinterpret_cast<PageHeader *>(page->data)},
-                                                           page{page}, meta{table_meta} {}
+                                                                 page{page}, meta{table_meta} {}
 
     [[nodiscard]] std::shared_ptr<Record> Select(SlotID slot) const;
 
@@ -60,10 +60,10 @@ public:
      * @param slot
      * @param record
      */
-    void Update(SlotID slot, std::shared_ptr<Record> record);
+    void Update(SlotID slot, std::shared_ptr<Record> &record);
 
     [[nodiscard]] bool Contains(RecordSize record_size) const {
-        return header.free_space - sizeof(SlotID) >= record_size;
+        return header.free_space >= record_size + sizeof(SlotID);
     }
 
     /**
