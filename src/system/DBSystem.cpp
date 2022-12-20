@@ -73,13 +73,23 @@ std::shared_ptr<Result> DBSystem::UseDatabase(const std::string &db_name) {
     // load tables
     table_info_fd = FileSystem::OpenFile(DB_DIR / db_name / TABLE_FILE);
     const uint8_t *table_info_ptr{buffer.ReadPage(table_info_fd, 0)->data};
-    read_var(table_info_ptr, table_count);
 
-    std::string table_name;
-    TableID table_id;
+    // read into buffer data structure, since data may be swapped out by buffer system
+    read_var(table_info_ptr, table_count);
+    std::vector<std::string> table_names;
+    std::vector<TableID> table_ids;
     for (int i{0}; i < table_count; ++i) {
+        std::string table_name;
+        TableID table_id;
         read_var(table_info_ptr, table_id);
         read_string(table_info_ptr, table_name);
+        table_names.push_back(std::move(table_name));
+        table_ids.push_back(table_id);
+    }
+
+    for (int i{0}; i < table_count; ++i) {
+        auto table_id{table_ids[i]};
+        auto table_name{table_names[i]};
         table_name_map.insert({table_name, table_id});
         table_data_fd[table_id] = FileSystem::OpenFile(DB_DIR / db_name / fmt::format(TABLE_DATA_PATTERN, table_id));
         table_meta_fd[table_id] = FileSystem::OpenFile(DB_DIR / db_name / fmt::format(TABLE_META_PATTERN, table_id));
