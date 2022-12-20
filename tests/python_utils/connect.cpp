@@ -72,6 +72,11 @@ list query(std::string query) {
                             row.append(float_p->value);
                             continue;
                         }
+                        auto date_p{std::dynamic_pointer_cast<Date>(field)};
+                        if (date_p) {
+                            row.append(date_p->ToString());
+                            continue;
+                        }
                         auto str_p{std::dynamic_pointer_cast<String>(field)};
                         if (str_p) {
                             row.append(str_p->data);

@@ -10,6 +10,8 @@
 #include <cstring>
 #include <compare>
 
+#include <boost/algorithm/string.hpp>
+
 #include <defines.h>
 #include <utils/Serialization.h>
 #include <exception/OperationException.h>
@@ -20,6 +22,7 @@ enum class FieldType {
     FLOAT = 2,
     CHAR = 3,
     VARCHAR = 4,
+    DATE = 5
 };
 
 class PrimaryKey {
@@ -169,8 +172,74 @@ public:
         write_var(dst, value);
     }
 
-    std::shared_ptr<Float> ToFloat() const {
+    [[nodiscard]] std::shared_ptr<Float> ToFloat() const {
         return std::make_shared<Float>(value);
+    }
+};
+
+class Date : public Field {
+public:
+    int value;
+
+    static int StringToDateInt(const std::string &date_format) {
+        std::vector<std::string> result;
+        boost::split(result, date_format, boost::is_any_of("-"));
+        int value{0};
+        if (result.size() == 3) {
+            value += std::stoi(result[0]) * 1'0000;
+            value += std::stoi(result[1]) * 100;
+            value += std::stoi(result[2]);
+            return value;
+        } else {
+            throw OperationError{"Invalid date string {}", date_format};
+        }
+    }
+
+    static std::string DateIntToString(int value) {
+        return fmt::format(
+                "{:04d}-{:02d}-{:02d}",
+                value % 1'0000'0000 / 1'0000,
+                value % 1'0000 / 100,
+                value % 100
+        );
+    }
+
+    explicit Date(int value) : Field{FieldType::DATE}, value{value} {}
+
+    explicit Date(const std::string &date_format) : Field{FieldType::DATE}, value{StringToDateInt(date_format)} {}
+
+    static std::shared_ptr<Date> FromSrc(const uint8_t *&src) {
+        int value;
+        read_var(src, value);
+        return std::make_shared<Date>(value);
+    }
+
+    std::partial_ordering operator<=>(const Field &rhs) const override {
+        if (is_null || rhs.is_null) {
+            return std::partial_ordering::unordered;
+        }
+        auto date_rhs{dynamic_cast<const Date &>(rhs)};
+        return value <=> date_rhs.value;
+    }
+
+    bool operator==(const Field &rhs) const override {
+        if (is_null || rhs.is_null) {
+            return false;
+        }
+        auto date_rhs{dynamic_cast<const Date &>(rhs)};
+        return value == date_rhs.value;
+    }
+
+    [[nodiscard]] RecordSize Size() const override {
+        return sizeof(value);
+    }
+
+    [[nodiscard]] std::string ToString() const override {
+        return DateIntToString(value);
+    }
+
+    void Write(uint8_t *&dst) const override {
+        write_var(dst, value);
     }
 };
 
@@ -353,6 +422,8 @@ inline std::shared_ptr<Field> Field::LoadField(FieldType type, const uint8_t *&s
             return Char::FromSrc(src, max_len);
         case FieldType::VARCHAR:
             return VarChar::FromSrc(src);
+        case FieldType::DATE:
+            return Date::FromSrc(src);
         default:
             assert(false);
     }
@@ -377,6 +448,11 @@ inline std::shared_ptr<Field> Field::MakeNull(FieldType type, RecordSize max_len
         }
         case FieldType::VARCHAR: {
             auto varchar_p{std::make_shared<VarChar>("")};
+            varchar_p->is_null = true;
+            return varchar_p;
+        }
+        case FieldType::DATE: {
+            auto varchar_p{std::make_shared<Date>(0)};
             varchar_p->is_null = true;
             return varchar_p;
         }

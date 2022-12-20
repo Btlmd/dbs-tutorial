@@ -482,6 +482,20 @@ DBVisitor::GetValue(SQLParser::ValueContext *ctx, const std::shared_ptr<FieldMet
         }
     }
 
+//    auto date_p{ctx->Date()};
+//    if (date_p) {
+//        if (selected_field->type == FieldType::DATE) {
+//            return std::make_shared<Date>(date_p->getText());
+//        } else {
+//            auto type_name{magic_enum::enum_name(selected_field->type)};
+//            throw OperationError{
+//                    "Incompatible type; Expecting {} for column {}, got DATE instead",
+//                    type_name,
+//                    selected_field->name
+//            };
+//        }
+//    }
+
     auto str_p{ctx->String()};
     if (str_p) {
         std::string str_val{str_p->getText()};
@@ -496,7 +510,9 @@ DBVisitor::GetValue(SQLParser::ValueContext *ctx, const std::shared_ptr<FieldMet
                 throw OperationError{"Data too long for column `{}`", selected_field->name,};
             }
             return std::make_shared<VarChar>(str_val);
-        } else {
+        } if (selected_field->type == FieldType::DATE) {
+            return std::make_shared<Date>(str_val);
+        }else {
             auto type_name{magic_enum::enum_name(selected_field->type)};
             throw OperationError{
                     "Incompatible type; Expecting {} for column {}, got STRING instead",
