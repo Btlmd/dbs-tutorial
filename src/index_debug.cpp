@@ -18,7 +18,7 @@ int main() {
     FileID index_file_fd = FileSystem::NewFile(DB_DIR / "test_index_file.bin");
     BufferSystem buffer;
     IndexFile index_file(1, std::make_shared<IndexMeta>(
-                           7, 1, -1, IndexFieldType::INT2), {1, 2}, buffer, index_file_fd);
+                           127, 1, -1, IndexFieldType::INT2), {1, 2}, buffer, index_file_fd);
 
     auto GetInt2 = [](int i, int j) {
         return std::make_shared<IndexINT2>(i, false, j, false);
@@ -31,32 +31,35 @@ int main() {
         return std::make_shared<IndexINT2>(i, false, i-1, false);
     };
 
-    for (int i = 0; i < 20; ++i) {
-        index_file.InsertRecord(i, i+1, GetInt2a(i));
+
+    // Time start
+    auto start = std::chrono::system_clock::now();
+    for (int i = 0; i < 50; ++i) {
+        for (int j = 0; j < 50; ++j) {
+            index_file.InsertRecord(i, j, GetInt2(i, j));
+        }
+        DebugLog << "Insert " << i << "th page";
     }
+    // Time end
+    auto end = std::chrono::system_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    DebugLog << "Time cost: " << double(duration.count()) * std::chrono::microseconds::period::num / std::chrono::microseconds::period::den << "s" << std::endl;
 
-    for (int i = 0; i <= 30; ++i)
-    {
-        index_file.InsertRecord(i, i-1, GetInt2b(i));
+
+    // Start search
+    // Random a number between 0 and 1999
+    start = std::chrono::system_clock::now();
+    for (int k = 0; k < 5000; ++k) {
+        int i = rand() % 50, j = rand() % 50;
+        auto iter = index_file.SelectRecord(GetInt2(i, j));
+        auto record = index_file.Select(iter);
+        if (record->page_id != i || record->slot_id != j) {
+            DebugLog << "Error: " << i << " " << j << " " << record->page_id << " " << record->slot_id;
+        }
     }
-//    index_file.Print();
-//    for (int i = 0; i <= 100; ++i) {
-//        index_file.InsertRecord(1, 1, GetInt2(1, 1));  // TODO: check two-order index
-//    }
-    index_file.InsertRecord(1, 1, GetInt2(1, 1));  // TODO: check two-order index
-    index_file.InsertRecord(1, 1, GetInt2(1, 1));
-    index_file.Print();
-//    buffer.CloseFile(index_file_fd);
-
-//    index_file.Page(1)->Print();
-//    index_file.Page(2)->Print();
-//    index_file.Page(3)->Print();
-
-
-
-
-
-
+    end = std::chrono::system_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    DebugLog << "Time cost: " << double(duration.count()) * std::chrono::microseconds::period::num / std::chrono::microseconds::period::den << "s" << std::endl;
 
     return 0;
 }

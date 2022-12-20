@@ -65,7 +65,7 @@ std::pair<PageID, TreeOrder> IndexFile::SelectRecord(const std::shared_ptr<Index
 
     ret = {curr_page_id, insert_slot_id};
 
-    DebugLog << fmt::format("SelectRecord: key = {}, page_id = {}, order = {}\n", key->ToString(), ret.first, ret.second);
+//    DebugLog << fmt::format("SelectRecord: key = {}, page_id = {}, order = {}\n", key->ToString(), ret.first, ret.second);
     return ret;
 }
 
@@ -87,7 +87,7 @@ void IndexFile::InsertRecord(PageID page_id, SlotID slot_id, const std::shared_p
     auto [insert_page_id, insert_slot_id] {SelectRecord(key)};
 
     // 2. Now we find the position (i, j), we insert the record into the page i, slot j
-    DebugLog << fmt::format("InsertRecord: key = {}, page_id = {}, order = {}\n", key->ToString(), insert_page_id, insert_slot_id);
+//    DebugLog << fmt::format("InsertRecord: key = {}, page_id = {}, order = {}\n", key->ToString(), insert_page_id, insert_slot_id);
     PageID curr_page_id = insert_page_id;
     Page(curr_page_id)->Insert(insert_slot_id, record);
 
@@ -239,7 +239,7 @@ int IndexFile::DeleteRecordRange(const std::shared_ptr<IndexField>& key1, const 
         }
 
         // Judge whether the range is valid
-        if (curr_delete_range.first <= curr_delete_range.second) {
+        if (curr_delete_range.first <= curr_delete_range.second && curr_delete_range.first < child_cnt) {
             Page(delete_page_id)->DeleteRange(curr_delete_range.first, curr_delete_range.second);
             delete_cnt += curr_delete_range.second - curr_delete_range.first + 1;
             delete_page_id = SolveDelete(delete_page_id);  // In SolveDelete, you MUST assure that curr_page is not deleted
@@ -317,21 +317,22 @@ PageID IndexFile::SolveDelete(PageID delete_page_id) {
             throw std::runtime_error("Invalid B+ tree");
         }
     }
-
     UpdateKey(delete_page_id);
 
-    if (meta->root_page > 0 && Page(meta->root_page)->ChildCount() == 1) {
+    if (meta->root_page > 0 && !Page(meta->root_page)->IsLeaf() && Page(meta->root_page)->ChildCount() == 1) {
         // If the root page has only one child, then we can delete the root page
         // FreePage(meta->root_page);
         auto new_root_page_id = Page(meta->root_page)->Select(0)->page_id;
         Page(new_root_page_id)->SetParentPage(-1);
         meta->root_page = new_root_page_id;
+        nxt_valid_page = new_root_page_id;
     }
 
     // Delete root if it is empty
     if (meta->root_page > 0 && Page(meta->root_page)->ChildCount() == 0) {
         // FreePage(meta->root_page);
         meta->root_page = -1;
+        nxt_valid_page = -1;
     }
 
     return nxt_valid_page;
@@ -395,25 +396,54 @@ bool IndexFile::Merge(PageID left_page_id, PageID right_page_id, bool merge_into
     // Merge!
     if (merge_into_left) {
         Page(left_page_id)->InsertRange(left_page_child_cnt, Page(right_page_id)->SelectRange(0, right_page_child_cnt - 1));
-        for (auto i = 0; i < Page(right_page_id)->ChildCount(); ++i) {
-            auto child_page_id = Page(right_page_id)->Select(i)->page_id;
-            Page(child_page_id)->SetParentPage(left_page_id);
+
+        if (!Page(right_page_id)->IsLeaf()) {
+            for (auto i = 0; i < Page(right_page_id)->ChildCount(); ++i) {
+                auto child_page_id = Page(right_page_id)->Select(i)->page_id;
+                Page(child_page_id)->SetParentPage(left_page_id);
+            }
         }
+
         Page(left_page_id)->SetNextPage(Page(right_page_id)->NextPage());
         if (Page(right_page_id)->NextPage() > 0) {
             Page(Page(right_page_id)->NextPage())->SetPrevPage(left_page_id);
         }
     } else {
         Page(right_page_id)->InsertRange(0, Page(left_page_id)->SelectRange(0, left_page_child_cnt - 1));
-        for (auto i = 0; i < Page(left_page_id)->ChildCount(); ++i) {
-            auto child_page_id = Page(left_page_id)->Select(i)->page_id;
-            Page(child_page_id)->SetParentPage(right_page_id);
+
+        if (!Page(left_page_id)->IsLeaf()) {
+            for (auto i = 0; i < Page(left_page_id)->ChildCount(); ++i) {
+                auto child_page_id = Page(left_page_id)->Select(i)->page_id;
+                Page(child_page_id)->SetParentPage(right_page_id);
+            }
         }
+
         Page(right_page_id)->SetPrevPage(Page(left_page_id)->PrevPage());
         if (Page(left_page_id)->PrevPage() > 0) {
             Page(Page(left_page_id)->PrevPage())->SetNextPage(right_page_id);
         }
+
     }
 
     return true;
+}
+
+
+std::shared_ptr<IndexRecordLeaf> IndexFile::Select(std::pair<PageID, TreeOrder> iter) {
+    auto [page_id, slot_id] = iter;
+    if (page_id <= 0) {
+        return nullptr;
+    }
+    auto record = Page(page_id)->Select(slot_id);
+    return std::dynamic_pointer_cast<IndexRecordLeaf>(record);
+}
+
+
+std::pair<PageID, TreeOrder> IndexFile::Next(std::pair<PageID, TreeOrder> iter) {
+    auto child_cnt = Page(iter.first)->ChildCount();
+    if (iter.second < child_cnt - 1) {
+        return std::make_pair(iter.first, iter.second + 1);
+    } else {
+        return std::make_pair(Page(iter.first)->NextPage(), 0);
+    }
 }

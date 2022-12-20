@@ -14,7 +14,7 @@ std::shared_ptr<IndexRecord> IndexPage::Select(TreeOrder slot) const {
 std::vector<std::shared_ptr<IndexRecord>> IndexPage::SelectRange(TreeOrder start, TreeOrder end) const {
     auto base_offset = sizeof(IndexPage::PageHeader);
     const uint8_t *src;
-    std::vector<std::shared_ptr<IndexRecord>> records;
+    std::vector<std::shared_ptr<IndexRecord>> records {};
     for (int i = start; i <= end; ++i) {
         src = page->data + base_offset + i * IndexRecordSize();
         records.push_back(IndexRecord::FromSrc(src, meta, header.is_leaf));

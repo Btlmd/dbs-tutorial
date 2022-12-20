@@ -55,6 +55,8 @@ class IndexFile {
 
     /* Interfaces for index searching */
     // Return the position of the first element that is greater than or equal to key
+    std::pair<PageID, TreeOrder> Next(std::pair<PageID, TreeOrder> iter);
+    std::shared_ptr<IndexRecordLeaf> Select(std::pair<PageID, TreeOrder> iter);
     std::pair<PageID, TreeOrder> SelectRecord(const std::shared_ptr<IndexField>& key);
     void InsertRecord(PageID page_id, SlotID slot_id, const std::shared_ptr<IndexField>& key);
     int DeleteRecord(PageID page_id, SlotID slot_id, const std::shared_ptr<IndexField>& key);
@@ -91,7 +93,7 @@ class IndexFile {
 
         auto root_page_id = meta->root_page;  // Root page
         if (root_page_id < 0) {
-            TraceLog << "<Empty Tree>\n"; return;
+            DebugLog << "<Empty Tree>\n"; return;
         }
         q.push(root_page_id);
 
