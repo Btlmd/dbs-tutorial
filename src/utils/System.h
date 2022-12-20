@@ -80,11 +80,7 @@ void inline process_input(const std::string &in_string, DBVisitor &visitor) {
     }
 }
 
-void inline init_logger() {
-    if (!std::filesystem::is_directory("logs")) {
-        std::filesystem::create_directory("logs");
-    }
-
+void inline init_logger(boost::log::trivial::severity_level level=SEVERITY) {
     boost::shared_ptr<logging::core> core = logging::core::get();
     typedef sinks::synchronous_sink<sinks::text_ostream_backend> sink_t;
 
@@ -117,7 +113,7 @@ void inline init_logger() {
             % expr::smessage
     );
     core->add_sink(sink);
-    core->set_filter(logging::trivial::severity >= SEVERITY);
+    core->set_filter(logging::trivial::severity >= level);
     logging::add_common_attributes();
 }
 

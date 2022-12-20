@@ -61,6 +61,9 @@ target_link_libraries(front main_shared)
 add_executable(debug src/debug.cpp)
 target_link_libraries(debug main_shared)
 
+add_executable(index_debug src/index_debug.cpp)
+target_link_libraries(index_debug main_shared)
+
 FIND_PACKAGE(PythonInterp)
 FIND_PACKAGE(Boost COMPONENTS python${PYTHON_VERSION_SUFFIX})
 FIND_PACKAGE(PythonInterp 3)

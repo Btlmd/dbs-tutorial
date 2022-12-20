@@ -106,6 +106,7 @@ public:
             // aggregate in the segment
             std::vector<std::shared_ptr<Field>> ag;
             for (FieldID i{0}; i < aggregators.size(); ++i) {
+
                 auto &col{aggregators[i]};
                 if (col->type == ColumnType::COUNT_REC) {
                     ag.push_back(std::make_shared<Int>(std::distance(curr, boarder)));

@@ -27,6 +27,7 @@ typedef int32_t TableID;
 typedef int16_t FieldID;
 typedef int16_t RecordSize;
 typedef int16_t SlotID;
+typedef int16_t TreeOrder;
 typedef struct {
     PageID page;
     SlotID slot;
