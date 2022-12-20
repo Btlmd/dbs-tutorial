@@ -11,8 +11,19 @@ std::shared_ptr<IndexRecord> IndexPage::Select(TreeOrder slot) const {
     return IndexRecord::FromSrc(src, meta, header.is_leaf);
 }
 
+std::vector<std::shared_ptr<IndexRecord>> IndexPage::SelectRange(TreeOrder start, TreeOrder end) const {
+    auto base_offset = sizeof(IndexPage::PageHeader);
+    const uint8_t *src;
+    std::vector<std::shared_ptr<IndexRecord>> records;
+    for (int i = start; i <= end; ++i) {
+        src = page->data + base_offset + i * IndexRecordSize();
+        records.push_back(IndexRecord::FromSrc(src, meta, header.is_leaf));
+    }
+    return records;
+}
+
 TreeOrder IndexPage::Insert(TreeOrder slot, std::shared_ptr<IndexRecord> record) {
-    assert (header.child_cnt <= meta.m);
+    assert (header.child_cnt + 1 <= meta.m + 1);
 
     auto offset = sizeof(IndexPage::PageHeader) + slot * IndexRecordSize();
     auto size = (ChildCount() - slot) * IndexRecordSize();
@@ -27,9 +38,28 @@ TreeOrder IndexPage::Insert(TreeOrder slot, std::shared_ptr<IndexRecord> record)
 
     page->SetDirty();
 
-    return header.child_cnt++;
+    SetChildCount(ChildCount() + 1);
+    return ChildCount();
 }
 
+void IndexPage::InsertRange(TreeOrder slot, std::vector<std::shared_ptr<IndexRecord>> records) {
+    assert (header.child_cnt + records.size() <= meta.m + 1);
+    auto offset = sizeof(IndexPage::PageHeader) + slot * IndexRecordSize();
+    auto size = (ChildCount() - slot) * IndexRecordSize();
+    auto base = page->data;
+    memmove(base + offset + records.size() * IndexRecordSize(), base + offset, size);
+
+    uint8_t *dst;
+    for (int i = 0; i < records.size(); ++i) {
+        dst = page->data + offset + i * IndexRecordSize();
+        auto record2 = CastRecord(records[i]);
+        assert (record2 != nullptr);
+        record2->Write(dst);
+    }
+
+    page->SetDirty();
+    SetChildCount(ChildCount() + records.size());
+}
 
 void IndexPage::Update(TreeOrder slot, std::shared_ptr<IndexRecord> record) {
     assert (slot < header.child_cnt);
@@ -53,10 +83,30 @@ void IndexPage::Delete(TreeOrder slot_id) {
     for (TreeOrder i = slot_id + 1; i < header.child_cnt; i++) {
         auto src_offset = base_offset + i * IndexRecordSize();
         uint8_t *src = page->data + src_offset;
-        std::memmove(dst, src, IndexRecordSize());
+        std::memcpy(dst, src, IndexRecordSize());
         dst += IndexRecordSize();
     }
 
     page->SetDirty();
-    header.child_cnt--;
+    SetChildCount(ChildCount() - 1);
+}
+
+
+void IndexPage::DeleteRange(TreeOrder start, TreeOrder end) {
+    // Delete [start, end]
+    assert (start <= end && end < header.child_cnt);
+    auto base_offset = sizeof(IndexPage::PageHeader);
+    auto offset = base_offset + start * IndexRecordSize();
+    uint8_t *dst = page->data + offset;
+
+    // Move trailing records forward
+    for (TreeOrder i = end + 1; i < header.child_cnt; i++) {
+        auto src_offset = base_offset + i * IndexRecordSize();
+        uint8_t *src = page->data + src_offset;
+        std::memcpy(dst, src, IndexRecordSize());
+        dst += IndexRecordSize();
+    }
+
+    page->SetDirty();
+    SetChildCount(ChildCount() - (end - start + 1));
 }

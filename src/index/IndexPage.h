@@ -51,6 +51,9 @@ class IndexPage {
     TreeOrder Insert(TreeOrder slot, std::shared_ptr<IndexRecord> record);
     void Update(TreeOrder slot, std::shared_ptr<IndexRecord> record);
     void Delete(TreeOrder slot_id);
+    [[nodiscard]] std::vector<std::shared_ptr<IndexRecord>> SelectRange(TreeOrder start, TreeOrder end) const;
+    void InsertRange(TreeOrder slot, std::vector<std::shared_ptr<IndexRecord>> records);
+    void DeleteRange(TreeOrder start, TreeOrder end);  // Delete [start, end]
     /* End: Manipulation methods */
 
     void Init(bool is_leaf) {
@@ -107,6 +110,10 @@ class IndexPage {
 
     bool IsOverflow() {
         return header.child_cnt > meta.m;
+    }
+
+    bool IsUnderflow(bool is_root) {
+        return header.child_cnt < (meta.m + 1) / 2 && !is_root;
     }
 
     std::shared_ptr<IndexRecord> CastRecord(std::shared_ptr<IndexRecord> ptr) {

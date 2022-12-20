@@ -57,8 +57,21 @@ class IndexFile {
     // Return the position of the first element that is greater than or equal to key
     std::pair<PageID, TreeOrder> SelectRecord(const std::shared_ptr<IndexField>& key);
     void InsertRecord(PageID page_id, SlotID slot_id, const std::shared_ptr<IndexField>& key);
-//    void DeleteRecord(PageID page_id_old, SlotID slot_id_old, IndexField* key);
-//    void DeleteRecordRange(IndexField* key1, IndexField* key2);  // Delete [key1, key2]
+    int DeleteRecord(PageID page_id, SlotID slot_id, const std::shared_ptr<IndexField>& key);
+    int DeleteRecordRange(const std::shared_ptr<IndexField>& key1, const std::shared_ptr<IndexField>& key2);  // Delete [key1, key2]
+    int DeleteRecordRange(const std::shared_ptr<IndexField>& key) { return DeleteRecordRange(key, key); }
+    void UpdateRecord(PageID page_id, SlotID slot_id, const std::shared_ptr<IndexField>& key) {
+        DeleteRecord(page_id, slot_id, key);
+        InsertRecord(page_id, slot_id, key);
+    }
+
+    // Returns the next valid page after deletion for searching (here `next` means it is possible to meet new elements)
+    // In case of not underflow, return the next page
+    // In case of borrowing, return the current page
+    // In case of merging, return the next page
+    PageID SolveDelete(PageID delete_page_id);
+
+//
 //    void DeleteRecordRange(IndexField* key) { return DeleteRecordRange(key, key); }
 //    void UpdateRecord(PageID page_id_old, SlotID slot_id_old, IndexField* key_old,
 //                      PageID page_id, SlotID slot_id, IndexField* key) {
@@ -136,6 +149,9 @@ class IndexFile {
             }
         }
     }
+
+    bool Borrow(PageID left_page_id, PageID right_page_id);
+    bool Merge(PageID left_page_id, PageID right_page_id, bool merge_into_left);
 };
 
 #endif  // DBS_TUTORIAL_INDEXFILE_H
