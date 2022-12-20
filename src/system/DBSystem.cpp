@@ -199,7 +199,7 @@ DBSystem::CreateTable(const std::string &table_name, const std::vector<std::shar
 
     try {
         meta = std::make_shared<TableMeta>(
-                table_id, table_name, 0, FieldMeteTable{field_meta}, meta_fd, buffer);
+                table_id, table_name, 0, FieldMetaTable{field_meta}, meta_fd, buffer);
 
         // primary key and foreign keys
         if (raw_pk) {
