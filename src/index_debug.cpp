@@ -31,11 +31,16 @@ int main() {
         return std::make_shared<IndexINT2>(i, false, i-1, false);
     };
 
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 10; ++i) {
         index_file.InsertRecord(i, i+1, GetInt2a(i));
     }
-    for (int i = 0; i < 3; ++i) {
+
+    for (int i = 0; i <= 10; ++i) {
         index_file.InsertRecord(i, i+1, GetInt2b(i));
+    }
+//    index_file.Print();
+    for (int i = 0; i <= 100; ++i) {
+        index_file.InsertRecord(1, 1, GetInt2(1, 1));  // TODO: check two-order index
     }
     index_file.InsertRecord(1, 1, GetInt2(1, 1));  // TODO: check two-order index
     index_file.InsertRecord(1, 1, GetInt2(1, 1));

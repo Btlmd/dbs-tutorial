@@ -16,14 +16,16 @@ std::pair<PageID, TreeOrder> IndexFile::SelectRecord(const std::shared_ptr<Index
     while (!Page(curr_page_id)->IsLeaf()) {
         // Find the first child that is greater than or equal to key
         auto child_cnt = Page(curr_page_id)->ChildCount();
-        curr_page_id = Page(curr_page_id)->Select(Page(curr_page_id)->ChildCount() - 1)->page_id;
+        auto curr_page_id_candidate = Page(curr_page_id)->Select(Page(curr_page_id)->ChildCount() - 1)->page_id;
         for (TreeOrder i = 0; i < child_cnt; ++i) {
             auto entry = Page(curr_page_id)->Select(i);
-            if (*(entry->key) >= *key) {
-                curr_page_id = entry->page_id;
+            auto entry_key = Page(curr_page_id)->CastRecord(entry)->key;
+            if (*entry_key >= *key) {
+                curr_page_id_candidate = entry->page_id;
                 break;
             }
         }
+        curr_page_id = curr_page_id_candidate;
     }
     ret.first = curr_page_id;
 

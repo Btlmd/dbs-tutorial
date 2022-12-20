@@ -117,14 +117,18 @@ class IndexINT2 : public IndexField {
                                             IndexField{IndexFieldType::INT2}, value1{value1},
                                             value2{value2}, is_null1(is_null1), is_null2(is_null2) {}
 
-    explicit IndexINT2(int value1, bool is_null1) :
+    explicit IndexINT2(int value1, bool is_null1, bool from_src=false) :
                                             IndexField{IndexFieldType::INT2}, value1{value1},
-                                            value2{0}, is_null1(is_null1), is_null2(true) {}
+                                            value2{0}, is_null1(is_null1), is_null2(true) {
+        if (from_src) {
+            is_null2 = false; value2 = std::numeric_limits<int>::max();
+        }
+    }
 
     // Make NULL values appear to be the smallest value
     std::partial_ordering operator<=>(const IndexField &rhs) const override {
         auto int_rhs{dynamic_cast<const IndexINT2 &>(rhs)};
-        if (is_null1 && int_rhs.is_null1) {
+        if ((is_null1 && int_rhs.is_null1) || (!is_null1 && !int_rhs.is_null1 && value1 == int_rhs.value1)) {
             if (is_null2 && int_rhs.is_null2) {
                 return std::partial_ordering::equivalent;
             } else if (is_null2) {
@@ -145,7 +149,7 @@ class IndexINT2 : public IndexField {
 
     bool operator==(const IndexField &rhs) const override {
         auto int_rhs{dynamic_cast<const IndexINT2 &>(rhs)};
-        if (is_null1 && int_rhs.is_null1) {
+        if ((is_null1 && int_rhs.is_null1) || (!is_null1 && !int_rhs.is_null1 && value1 == int_rhs.value1)) {
             if (is_null2 && int_rhs.is_null2) {
                 return true;
             } else if (is_null2 || int_rhs.is_null2) {
@@ -184,7 +188,7 @@ class IndexINT2 : public IndexField {
         int value1; bool is_null1;
         read_var(src, value1);
         read_var(src, is_null1);
-        return std::make_shared<IndexINT2>(value1, is_null1);
+        return std::make_shared<IndexINT2>(value1, is_null1, true);
     }
 
     void Write(uint8_t *&dst) const override {
