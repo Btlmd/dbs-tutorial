@@ -149,6 +149,7 @@ private:
     FileID table_info_fd{-1};
     std::unordered_map<TableID, FileID> table_data_fd;
     std::unordered_map<TableID, FileID> table_meta_fd;
+    std::map<std::pair<TableID, std::vector<FieldID>>, FileID> table_index_fd;
     std::unordered_map<TableID, std::shared_ptr<TableMeta>> meta_map;
     boost::bimap<std::string, TableID> table_name_map;
     bool on_use{false};

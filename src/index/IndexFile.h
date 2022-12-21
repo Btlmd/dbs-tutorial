@@ -28,7 +28,7 @@ class IndexFile {
         Write();
     }
 
-    // Constructor for loading existing index file
+    // Constructor for loading existing index file (Read fd from DBSystem.table_index_fd)
     explicit IndexFile(BufferSystem& buffer, FileID fd) : buffer{buffer}, fd{fd} {
         // Read Page 0
         class Page* page = buffer.ReadPage(fd, 0);
@@ -66,6 +66,7 @@ class IndexFile {
     std::pair<PageID, TreeOrder> Next(std::pair<PageID, TreeOrder> iter);
     std::shared_ptr<IndexRecordLeaf> Select(std::pair<PageID, TreeOrder> iter);
     std::pair<PageID, TreeOrder> SelectRecord(const std::shared_ptr<IndexField>& key);
+    std::pair<PageID, TreeOrder> SelectRecordExact(const std::shared_ptr<IndexField>& key);  // Return {-1, -1} if no exact match
     void InsertRecord(PageID page_id, SlotID slot_id, const std::shared_ptr<IndexField>& key);
     int DeleteRecord(PageID page_id, SlotID slot_id, const std::shared_ptr<IndexField>& key);
     int DeleteRecordRange(const std::shared_ptr<IndexField>& key1, const std::shared_ptr<IndexField>& key2);  // Delete [key1, key2]

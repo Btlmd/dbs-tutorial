@@ -94,6 +94,16 @@ std::shared_ptr<Result> DBSystem::UseDatabase(const std::string &db_name) {
         table_data_fd[table_id] = FileSystem::OpenFile(DB_DIR / db_name / fmt::format(TABLE_DATA_PATTERN, table_id));
         table_meta_fd[table_id] = FileSystem::OpenFile(DB_DIR / db_name / fmt::format(TABLE_META_PATTERN, table_id));
         meta_map[table_id] = TableMeta::FromSrc(table_meta_fd[table_id], buffer);
+
+        // Insert into table_index_fd
+        for (auto& index : meta_map[table_id]->index_keys) {
+            std::vector<FieldID> field_ids;
+            for (int ii = 0; ii < index->field_count; ++ii) {
+                field_ids.push_back(index->fields[ii]);
+            }
+            table_index_fd[std::make_pair((TableID)table_id, field_ids)] =
+                FileSystem::OpenFile(DB_DIR / db_name / GetIndexFilePath(table_id, field_ids));
+        }
     }
 
     current_database = db_name;
@@ -143,13 +153,20 @@ void DBSystem::CloseDatabase() {
     auto close_func = [this](const std::pair<TableID, FileID> &relation) -> void {
         buffer.CloseFile(relation.second);
     };
+
+    auto close_func_index  = [this](const std::pair<std::pair<TableID, std::vector<FieldID>>, FileID> &relation) -> void {
+        buffer.CloseFile(relation.second);
+    };
+
     std::for_each(table_meta_fd.begin(), table_meta_fd.end(), close_func);
     std::for_each(table_data_fd.begin(), table_data_fd.end(), close_func);
+    std::for_each(table_index_fd.begin(), table_index_fd.end(), close_func_index);
 
     // reset table status
     table_name_map.clear();
     table_data_fd.clear();
     table_meta_fd.clear();
+    table_index_fd.clear();
     meta_map.clear();
 
     current_database = "";
@@ -233,6 +250,9 @@ std::shared_ptr<Result> DBSystem::DropTable(const std::string &table_name) {
     buffer.CloseFile(table_data_fd[table_id]);
     FileSystem::RemoveFile(DB_DIR / current_database / fmt::format(TABLE_DATA_PATTERN, table_id));
     FileSystem::RemoveFile(DB_DIR / current_database / fmt::format(TABLE_META_PATTERN, table_id));
+
+    // TODO: drop index
+
     table_data_fd.erase(table_id);
     table_meta_fd.erase(table_id);
     meta_map.erase(table_id);
@@ -552,6 +572,7 @@ DBSystem::Update(TableID table_id, const std::vector<std::pair<std::shared_ptr<F
 }
 
 void DBSystem::InsertRecord(TableID table_id, const std::shared_ptr<Record> &record) {
+    // TODO: update index
     auto page_to_insert{FindPageWithSpace(table_id, record->Size())};
     page_to_insert->Insert(record);
 }
@@ -580,7 +601,7 @@ std::shared_ptr<Result> DBSystem::AddIndex(TableID table_id, const std::vector<F
 
     auto new_index = std::make_shared<IndexKey>();
     new_index->field_count = 0;
-    new_index->user_created = is_user;
+    new_index->user_created = false;
     new_index->reference_count = 0;  // 1 if system-created, 0 if user-created
     if (!is_user) {
         new_index->reference_count = 1;
@@ -612,8 +633,8 @@ std::shared_ptr<Result> DBSystem::AddIndex(TableID table_id, const std::vector<F
         }
         auto meta = std::make_shared<IndexMeta>(type);
         auto new_index_file = std::make_shared<IndexFile>(table_id, meta, field_ids, buffer, fd);
+        table_index_fd[std::make_pair(table_id, field_ids)] = fd;
 
-        // TODO: Build up index
         TrivialScanNode scan_node{buffer, meta_map[table_id], nullptr, table_data_fd[table_id]};
         while (!scan_node.Over()) {
             RecordList records = scan_node.Next();
@@ -632,9 +653,6 @@ std::shared_ptr<Result> DBSystem::AddIndex(TableID table_id, const std::vector<F
                 new_index_file->InsertRecord(page_id, slot_ids[i], IndexField::FromDataField(type, fields));
             }
         }
-
-
-
 
     }
 
@@ -716,6 +734,7 @@ std::shared_ptr<Result> DBSystem::DropIndex(TableID table_id, const std::vector<
     // Finish up
     if (index->reference_count == 0 && !index->user_created) {
         table_meta->index_keys.erase(find_result);
+        table_index_fd.erase(std::make_pair(table_id, field_ids));
         FileSystem::RemoveFile(DB_DIR / current_database / GetIndexFilePath(table_id, field_ids));
     }
 
