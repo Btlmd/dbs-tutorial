@@ -16,7 +16,9 @@
  *
  * Page 1 ~ Page n: Foreign Keys (each foreign key has fixed length)
  *
- * Page (n + 1) ~ Page k: FieldMetas
+ * Page (n + 1) ~ Page m: Index Keys
+ *
+ * Page (m + 1) ~ Page k: FieldMetas
  *
  * Page (k + 1) ~ Page ([total_page_count] - 1): FSM Pages
  */
@@ -43,6 +45,8 @@ std::shared_ptr<TableMeta> TableMeta::FromSrc(FileID fd, BufferSystem &buffer) {
     read_var(src, field_count);
     FieldID fk_count;
     read_var(src, fk_count);
+    FieldID index_count;
+    read_var(src, index_count);
     bool has_pk;
     read_var(src, has_pk);
     if (has_pk) {
@@ -64,6 +68,14 @@ std::shared_ptr<TableMeta> TableMeta::FromSrc(FileID fd, BufferSystem &buffer) {
             ++fk_loaded;
         }
     }
+
+    // Index Keys
+    FieldID index_loaded{0};
+    while (index_loaded < index_count) {
+        NextPage();
+        // TODO
+    }
+
 
     // Fields
     FieldID field_loaded{0};
@@ -104,6 +116,7 @@ void TableMeta::Write() {
     write_string(dst, table_name);
     write_var(dst, static_cast<FieldID>(field_meta.Count()));
     write_var(dst, static_cast<FieldID>(foreign_keys.size()));
+    write_var(dst, static_cast<FieldID>(index_keys.size()));
     write_var(dst, bool(primary_key == nullptr));
     if (primary_key != nullptr) {
         write_var(dst, *primary_key);
@@ -115,6 +128,11 @@ void TableMeta::Write() {
             NextPage();
         }
         write_var(dst, *foreign_keys[i]);
+    }
+
+    // Index Keys
+    for (FieldID i{0}; i < index_keys.size(); ++i) {
+        // TODO
     }
 
     // Fields

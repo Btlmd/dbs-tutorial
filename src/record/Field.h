@@ -38,6 +38,13 @@ public:
     FieldID reference_fields[MAX_FIELD_COUNT];
 };
 
+class IndexKey {
+   public:
+    FieldID field_count{0};
+    FieldID fields[MAX_FIELD_COUNT];
+    int reference_count{0};
+};
+
 class Field {
 public:
     FieldType type;
