@@ -3,6 +3,7 @@
 //
 
 #include "IndexMeta.h"
+#include <index/IndexPage.h>
 
 RecordSize IndexMeta::Size(bool is_leaf) {
 
@@ -24,6 +25,13 @@ RecordSize IndexMeta::Size(bool is_leaf) {
         return _size_internal = index_record->Size();
     }
 
+}
 
 
+IndexMeta::IndexMeta(IndexFieldType field_type)
+    : page_num{1}, root_page{-1}, field_type{field_type} {
+    auto null_field = IndexField::MakeNull(field_type);
+    auto null_record = std::make_shared<IndexRecordLeaf>(0, 0, null_field);
+    m = (PAGE_SIZE - sizeof(IndexPage::PageHeader)) / null_record->Size() - 1;
+    TraceLog << "Created meta with m = " << m;
 }

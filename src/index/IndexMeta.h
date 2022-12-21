@@ -9,7 +9,6 @@
 #include <index/IndexField.h>
 #include <index/IndexRecord.h>
 
-class IndexField;
 
 class IndexMeta {
 public:
@@ -20,6 +19,9 @@ public:
 
     explicit IndexMeta(TreeOrder m, PageID page_num, PageID root_page, IndexFieldType field_type)
             : m{m}, page_num{page_num}, root_page{root_page}, field_type{field_type} {}
+
+    // Used for creating meta
+    explicit IndexMeta(IndexFieldType field_type);
 
     IndexMeta() = default;
 

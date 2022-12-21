@@ -59,6 +59,14 @@ public:
     std::shared_ptr<Result> DropIndex(const std::string &table_name, const std::vector<std::string> &field_name);
     std::shared_ptr<Result> DropIndex(TableID table_id, const std::vector<FieldID>& field_ids, bool is_user);
 
+    static std::string GetIndexFilePath(TableID table_id, const std::vector<FieldID>& field_ids) {
+        auto field_string = std::to_string(field_ids[0]);
+        for (auto i = 1; i < field_ids.size(); ++i) {
+            field_string += "_" + std::to_string(field_ids[i]);
+        }
+        return fmt::format(TABLE_INDEX_PATTERN, table_id, field_string);
+    }
+
 
     /**
      * Delete records satisfying `cond`

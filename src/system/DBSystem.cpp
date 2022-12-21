@@ -597,9 +597,44 @@ std::shared_ptr<Result> DBSystem::AddIndex(TableID table_id, const std::vector<F
 
         table_meta->index_keys.push_back(new_index);
 
-        // TODO: get index file
+        // Create index file
+        FileSystem::NewFile(DB_DIR / current_database / GetIndexFilePath(table_id, field_ids));
+        FileID fd = FileSystem::OpenFile(DB_DIR / current_database / GetIndexFilePath(table_id, field_ids));
 
-        // TODO: build up index
+        IndexFieldType type = IndexFieldType::INVALID;
+        if (field_ids.size() == 1 && table_meta->field_meta.meta[field_ids[0]]->type == FieldType::INT) {
+            type = IndexFieldType::INT;
+        } else if (field_ids.size() == 2 && table_meta->field_meta.meta[field_ids[0]]->type == FieldType::INT
+                   && table_meta->field_meta.meta[field_ids[1]]->type == FieldType::INT) {
+            type = IndexFieldType::INT2;
+        } else {
+            throw OperationError("Unsupported index field type.");
+        }
+        auto meta = std::make_shared<IndexMeta>(type);
+        auto new_index_file = std::make_shared<IndexFile>(table_id, meta, field_ids, buffer, fd);
+
+        // TODO: Build up index
+        TrivialScanNode scan_node{buffer, meta_map[table_id], nullptr, table_data_fd[table_id]};
+        while (!scan_node.Over()) {
+            RecordList records = scan_node.Next();
+            PageID page_id = scan_node.current_page;
+            const std::vector<SlotID>& slot_ids = scan_node.slot_ids;
+
+            for (int i = 0; i < records.size(); i++) {
+                std::shared_ptr<Record> record = records[i];
+
+                // Gather fields
+                std::vector<std::shared_ptr<Field>> fields;
+                for (const auto &field_id: field_ids) {
+                    fields.push_back(record->fields[field_id]);
+                }
+
+                new_index_file->InsertRecord(page_id, slot_ids[i], IndexField::FromDataField(type, fields));
+            }
+        }
+
+
+
 
     }
 
@@ -624,7 +659,6 @@ std::shared_ptr<Result> DBSystem::AddIndex(TableID table_id, const std::vector<F
 
 
 std::shared_ptr<Result> DBSystem::DropIndex(const std::string &table_name, const std::vector<std::string> &field_name) {
-    // TODO
     auto table_id = GetTableID(table_name);
     auto table_meta{meta_map[table_id]};
 
@@ -682,9 +716,7 @@ std::shared_ptr<Result> DBSystem::DropIndex(TableID table_id, const std::vector<
     // Finish up
     if (index->reference_count == 0 && !index->user_created) {
         table_meta->index_keys.erase(find_result);
-
-        // TODO: delete index file
-
+        FileSystem::RemoveFile(DB_DIR / current_database / GetIndexFilePath(table_id, field_ids));
     }
 
 

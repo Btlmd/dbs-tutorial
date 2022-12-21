@@ -20,10 +20,15 @@ class IndexFile {
     std::shared_ptr<IndexMeta> meta;
     std::vector<FieldID> field_ids;
 
+    // Constructor for new index file
     explicit IndexFile(TableID _table_id, std::shared_ptr<IndexMeta> _meta, std::vector<FieldID> _field_ids,
                        BufferSystem& buffer, FileID fd) :
-                table_id(_table_id), meta(std::move(_meta)), field_ids(std::move(_field_ids)), buffer(buffer), fd(fd) {}
+                table_id(_table_id), meta(std::move(_meta)), field_ids(std::move(_field_ids)), buffer(buffer), fd(fd) {
+        class Page* page = buffer.CreatePage(fd, 0);
+        Write();
+    }
 
+    // Constructor for loading existing index file
     explicit IndexFile(BufferSystem& buffer, FileID fd) : buffer{buffer}, fd{fd} {
         // Read Page 0
         class Page* page = buffer.ReadPage(fd, 0);
@@ -41,8 +46,11 @@ class IndexFile {
     }
 
     ~IndexFile() {
-        // Write back Page 0
-        class Page* page = buffer.CreatePage(fd, 0);
+        Write();
+    }
+
+    void Write() {
+        class Page* page = buffer.ReadPage(fd, 0);
         uint8_t *dst = page->data;
         write_var(dst, table_id);
         meta->Write(dst);
@@ -72,14 +80,6 @@ class IndexFile {
     // In case of borrowing, return the current page
     // In case of merging, return the next page
     PageID SolveDelete(PageID delete_page_id);
-
-//
-//    void DeleteRecordRange(IndexField* key) { return DeleteRecordRange(key, key); }
-//    void UpdateRecord(PageID page_id_old, SlotID slot_id_old, IndexField* key_old,
-//                      PageID page_id, SlotID slot_id, IndexField* key) {
-//        DeleteRecord(page_id_old, slot_id_old, key_old);
-//        InsertRecord(page_id, slot_id, key);
-//    }
 
 
     /* Interfaces for index management */

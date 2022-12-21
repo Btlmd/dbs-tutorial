@@ -110,3 +110,16 @@ void IndexPage::DeleteRange(TreeOrder start, TreeOrder end) {
     page->SetDirty();
     SetChildCount(ChildCount() - (end - start + 1));
 }
+
+
+RecordSize IndexPage::IndexRecordSize() {
+    return meta.Size(header.is_leaf);
+}
+
+bool IndexPage::IsOverflow() {
+    return header.child_cnt > meta.m;
+}
+
+bool IndexPage::IsUnderflow(bool is_root) {
+    return header.child_cnt < (meta.m + 1) / 2 && !is_root;
+}

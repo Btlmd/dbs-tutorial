@@ -36,3 +36,14 @@ std::shared_ptr<IndexField> IndexField::MakeNull(IndexFieldType _type) {
             assert(false);
     }
 }
+
+std::shared_ptr<IndexField> IndexField::FromDataField(IndexFieldType type, const std::vector<std::shared_ptr<Field>> &fields) {
+    switch (type) {
+        case IndexFieldType::INT:
+            return IndexINT::FromDataField(fields);
+        case IndexFieldType::INT2:
+            return IndexINT2::FromDataField(fields);
+        default:
+            assert(false);
+    }
+}

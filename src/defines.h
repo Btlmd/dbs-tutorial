@@ -65,7 +65,7 @@ const std::filesystem::path DB_DIR{"./databases"};
 constexpr char TABLE_FILE[]{"tables.bin"};
 constexpr char TABLE_META_PATTERN[]{"{}_meta.bin"};
 constexpr char TABLE_DATA_PATTERN[]{"{}_data.bin"};
-constexpr char TABLE_INDEX_PATTERN[]{"{}_index.bin"};
+constexpr char TABLE_INDEX_PATTERN[]{"{}_index_{}.bin"};
 
 
 // Logging Settings
