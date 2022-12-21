@@ -136,12 +136,8 @@ class IndexFile {
         auto child_cnt = Page(curr_page_id)->ChildCount();
         TreeOrder mid = child_cnt / 2;
 
-        Page(new_page_id)->SetChildCount(child_cnt - mid);
-        for (TreeOrder i = child_cnt - 1; i >= mid; --i) {
-            auto entry = Page(curr_page_id)->Select(i);
-            Page(new_page_id)->Update(i - mid, entry);
-            Page(curr_page_id)->Delete(i);
-        }
+        Page(new_page_id)->InsertRange(0, Page(curr_page_id)->SelectRange(mid, child_cnt-1));
+        Page(curr_page_id)->DeleteRange(mid, child_cnt-1);
 
         // Update parent of children
         if (!Page(new_page_id)->IsLeaf()) {

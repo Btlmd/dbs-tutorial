@@ -7,7 +7,7 @@
 #include <cassert>
 
 Page *BufferSystem::ReadPage(FileID fd, PageID page_id) {
-    TraceLog << "BufferSystem Read @" << fd << ", #" << page_id;
+//    TraceLog << "BufferSystem Read @" << fd << ", #" << page_id;
     Page *pos;
     auto lookup {buffer_map_.find({fd, page_id})};
     if (lookup == buffer_map_.end()) {
@@ -19,7 +19,7 @@ Page *BufferSystem::ReadPage(FileID fd, PageID page_id) {
         pos = lookup->second;
     }
     Access(pos);
-    TraceLog << " - Use page" << pos->Seq();
+//    TraceLog << " - Use page" << pos->Seq();
     return pos;
 }
 

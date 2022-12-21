@@ -23,7 +23,7 @@ public:
 
     IndexMeta() = default;
 
-    RecordSize Size(bool is_leaf) const;
+    RecordSize Size(bool is_leaf);
 
     // Serialize the meta into `dst` and move `dst` forward
     void Write(uint8_t *&dst) const {
@@ -46,6 +46,8 @@ public:
         return std::make_shared<IndexMeta>(_m, _page_num, _root_page, _field_type);
     }
 
+   private:
+    RecordSize _size_internal{-1}, _size_leaf{-1};
 
 };
 

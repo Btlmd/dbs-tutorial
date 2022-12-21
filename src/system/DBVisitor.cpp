@@ -705,3 +705,34 @@ antlrcpp::Any DBVisitor::visitSet_clause(SQLParser::Set_clauseContext *ctx) {
     }
     return updates;
 }
+
+antlrcpp::Any DBVisitor::visitAlter_add_index(SQLParser::Alter_add_indexContext *ctx) {
+    visitChildren(ctx);
+    auto table_name{ctx->Identifier()->getText()};
+
+    std::vector<std::string> indexed_fields;
+    std::transform(
+        ctx->identifiers()->Identifier().begin(),
+        ctx->identifiers()->Identifier().end(),
+        std::back_inserter(indexed_fields),
+        [](auto id) { return id->getText(); }
+    );
+
+    return system.AddIndex(table_name, indexed_fields);
+}
+
+
+antlrcpp::Any DBVisitor::visitAlter_drop_index(SQLParser::Alter_drop_indexContext *ctx) {
+    visitChildren(ctx);
+    auto table_name{ctx->Identifier()->getText()};
+
+    std::vector<std::string> indexed_fields;
+    std::transform(
+        ctx->identifiers()->Identifier().begin(),
+        ctx->identifiers()->Identifier().end(),
+        std::back_inserter(indexed_fields),
+        [](auto id) { return id->getText(); }
+    );
+
+    return system.DropIndex(table_name, indexed_fields);
+}

@@ -40,18 +40,18 @@ class IndexPage {
     } &header;
 
     Page* page;
-    const IndexMeta &meta;
+    IndexMeta& meta;
 
 
-    explicit IndexPage(Page *_page, const IndexMeta& _meta) : header{*reinterpret_cast<PageHeader *>(_page->data)},
+    explicit IndexPage(Page *_page, IndexMeta& _meta) : header{*reinterpret_cast<PageHeader *>(_page->data)},
                                                      page{_page}, meta{_meta} {}
 
     /* Start: Manipulation methods */
-    [[nodiscard]] std::shared_ptr<IndexRecord> Select(TreeOrder slot) const;
+    [[nodiscard]] std::shared_ptr<IndexRecord> Select(TreeOrder slot);
     TreeOrder Insert(TreeOrder slot, std::shared_ptr<IndexRecord> record);
     void Update(TreeOrder slot, std::shared_ptr<IndexRecord> record);
     void Delete(TreeOrder slot_id);
-    [[nodiscard]] std::vector<std::shared_ptr<IndexRecord>> SelectRange(TreeOrder start, TreeOrder end) const;
+    [[nodiscard]] std::vector<std::shared_ptr<IndexRecord>> SelectRange(TreeOrder start, TreeOrder end);
     void InsertRange(TreeOrder slot, std::vector<std::shared_ptr<IndexRecord>> records);
     void DeleteRange(TreeOrder start, TreeOrder end);  // Delete [start, end]
     /* End: Manipulation methods */
@@ -64,7 +64,7 @@ class IndexPage {
         header.parent_page = -1;
     }
 
-    RecordSize IndexRecordSize() const {
+    RecordSize IndexRecordSize() {
         return meta.Size(header.is_leaf);
     }
 

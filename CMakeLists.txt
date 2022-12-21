@@ -16,8 +16,9 @@ endif()
 
 #set(CMAKE_CXX_FLAGS "-Wall -Wextra")
 #set(CMAKE_CXX_FLAGS_DEBUG "-g")
+set(CMAKE_CXX_FLAGS_DEBUG "-pg")
 #set(CMAKE_CXX_FLAGS_DEBUG "-O0")
-#set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+set(CMAKE_CXX_FLAGS_DEBUG "-O3")
 
 # Libraries
     # From conan
@@ -44,9 +45,9 @@ execute_process(COMMAND ${PROJECT_SOURCE_DIR}/utils/generate_grammar.sh)
 file(GLOB_RECURSE dbms_source src/**/*.cpp)
 
 ## `main` static library
-#add_library(main STATIC ${dbms_source})
-#target_link_libraries(main ${LIBS})
-#target_include_directories(main PUBLIC src)
+add_library(main STATIC ${dbms_source})
+target_link_libraries(main ${LIBS})
+target_include_directories(main PUBLIC src)
 
 # `main` shared library
 add_library(main_shared SHARED ${dbms_source})
@@ -62,7 +63,7 @@ add_executable(debug src/debug.cpp)
 target_link_libraries(debug main_shared)
 
 add_executable(index_debug src/index_debug.cpp)
-target_link_libraries(index_debug main_shared)
+target_link_libraries(index_debug main)
 
 FIND_PACKAGE(PythonInterp)
 FIND_PACKAGE(Boost COMPONENTS python${PYTHON_VERSION_SUFFIX})

@@ -77,6 +77,10 @@ public:
 
     antlrcpp::Any visitSet_clause(SQLParser::Set_clauseContext *ctx) override;
 
+    antlrcpp::Any visitAlter_add_index(SQLParser::Alter_add_indexContext *ctx) override;
+
+    antlrcpp::Any visitAlter_drop_index(SQLParser::Alter_drop_indexContext *ctx) override;
+
 };
 
 

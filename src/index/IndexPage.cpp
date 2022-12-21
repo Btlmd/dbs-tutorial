@@ -4,14 +4,14 @@
 
 #include "IndexPage.h"
 
-std::shared_ptr<IndexRecord> IndexPage::Select(TreeOrder slot) const {
+std::shared_ptr<IndexRecord> IndexPage::Select(TreeOrder slot) {
     auto base_offset = sizeof(IndexPage::PageHeader);
     auto offset = base_offset + slot * IndexRecordSize();
     const uint8_t *src = page->data + offset;
     return IndexRecord::FromSrc(src, meta, header.is_leaf);
 }
 
-std::vector<std::shared_ptr<IndexRecord>> IndexPage::SelectRange(TreeOrder start, TreeOrder end) const {
+std::vector<std::shared_ptr<IndexRecord>> IndexPage::SelectRange(TreeOrder start, TreeOrder end) {
     auto base_offset = sizeof(IndexPage::PageHeader);
     const uint8_t *src;
     std::vector<std::shared_ptr<IndexRecord>> records {};
