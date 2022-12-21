@@ -16,9 +16,9 @@ endif()
 
 #set(CMAKE_CXX_FLAGS "-Wall -Wextra")
 #set(CMAKE_CXX_FLAGS_DEBUG "-g")
-set(CMAKE_CXX_FLAGS_DEBUG "-pg")
+#set(CMAKE_CXX_FLAGS_DEBUG "-pg")
 #set(CMAKE_CXX_FLAGS_DEBUG "-O0")
-set(CMAKE_CXX_FLAGS_DEBUG "-O3")
+#set(CMAKE_CXX_FLAGS_DEBUG "-O3")
 
 # Libraries
     # From conan
@@ -39,7 +39,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "-O3")
 list(APPEND LIBS cpp-terminal antlr4-runtime fmt Boost::log_setup Boost::log)
 
 # Generate grammar CPP files
-#execute_process(COMMAND ${PROJECT_SOURCE_DIR}/utils/generate_grammar.sh)
+execute_process(COMMAND ${PROJECT_SOURCE_DIR}/utils/generate_grammar.sh)
 
 # Project source
 file(GLOB_RECURSE dbms_source src/**/*.cpp)
