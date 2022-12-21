@@ -8,7 +8,7 @@
 #include <cassert>
 
 Page *BufferSystem::ReadPage(FileID fd, PageID page_id) {
-    TraceLog << "BufferSystem Read @" << fd << ", #" << page_id;
+    Trace("BufferSystem Read @" << fd << ", #" << page_id);
     Page *pos;
     auto lookup {buffer_map_.find({fd, page_id})};
     if (lookup == buffer_map_.end()) {
@@ -20,7 +20,7 @@ Page *BufferSystem::ReadPage(FileID fd, PageID page_id) {
         pos = lookup->second;
     }
     Access(pos);
-    TraceLog << " - Use page" << pos->Seq();
+    Trace(" - Use page" << pos->Seq());
     return pos;
 }
 
@@ -36,7 +36,7 @@ BufferSystem::BufferSystem() {
 
 void BufferSystem::WriteBack(Page *page) {
     if (page->dirty) {
-        TraceLog << "Write Back Dirty" << page->Seq();
+        Trace("Write Back Dirty" << page->Seq());
         FileSystem::WritePage(page->fd, page->id, page->data);
     }
     page->dirty = false;
@@ -47,7 +47,7 @@ BufferSystem::~BufferSystem() {
 }
 
 void BufferSystem::Access(Page *page) {
-    TraceLog << "Access" << page->Seq();
+    Trace("Access" << page->Seq());
     assert(visit_record_map_.find(page) != visit_record_map_.end());
     auto it{visit_record_map_[page]};
     if (it != visit_record_.begin()) {
@@ -58,11 +58,11 @@ void BufferSystem::Access(Page *page) {
 //    for (const auto &i: visit_record_) {
 //        table.push_back(std::to_string(i->seq_id));
 //    }
-//    TraceLog << "Sequence:" << boost::algorithm::join(table, ", ");
+//    Trace("Sequence:" << boost::algorithm::join(table, ", "));
 }
 
 void BufferSystem::ReleaseFile(FileID fd) {
-    TraceLog << "Release File @" << fd;
+    Trace("Release File @" << fd);
     // Write back page, mark the buffer space as free
     auto eraser = [this, fd](Page *pos) -> void {
         WriteBack(pos);
@@ -80,7 +80,7 @@ void BufferSystem::CloseFile(FileID fd) {
 }
 
 Page *BufferSystem::CreatePage(FileID fd, PageID page_id) {
-    TraceLog << "Create page for @" << fd << ", #" << page_id;
+    Trace("Create page for @" << fd << ", #" << page_id);
     return AllocPage(fd, page_id);
 }
 
@@ -94,7 +94,7 @@ Page *BufferSystem::AllocPage(FileID fd, PageID page_id) {
         WriteBack(pos);
         buffer_map_.erase({pos->fd, pos->id});
         buffer_map_fd_.drop(pos->fd, pos);
-        TraceLog << "Buffer full, drop " << pos->Seq();
+        Trace("Buffer full, drop " << pos->Seq());
     } else {
         // with free position
         pos = free_record_.front();
@@ -107,6 +107,6 @@ Page *BufferSystem::AllocPage(FileID fd, PageID page_id) {
     pos->fd = fd;
     pos->id = page_id;
 
-    TraceLog << "Allocated" << pos->Seq();
+    Trace("Allocated" << pos->Seq());
     return pos;
 }

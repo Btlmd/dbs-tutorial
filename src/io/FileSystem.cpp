@@ -23,7 +23,7 @@ void FileSystem::ReadPage(FileID fd, PageID page_id, uint8_t *dst) {
                 read_size
         };
     }
-    TraceLog << "FileSystem Read Page @" << fd << " #" << page_id;
+    Trace("FileSystem Read Page @" << fd << " #" << page_id);
 }
 
 void FileSystem::WritePage(FileID fd, PageID page_id, uint8_t *src) {
@@ -41,7 +41,7 @@ void FileSystem::WritePage(FileID fd, PageID page_id, uint8_t *src) {
                 write_size
         };
     }
-    TraceLog << "Write Page @" << fd << " #" << page_id;
+    Trace("Write Page @" << fd << " #" << page_id);
 }
 
 FileID FileSystem::OpenFile(const std::string &path) {
@@ -54,7 +54,7 @@ FileID FileSystem::OpenFile(const std::string &path) {
         throw FileSystemError{"Open file {} with non-zero returns value {}; Error #{}: {}",
                               path, fd, errno, errmsg};
     }
-    TraceLog << "Open file " << path << " with FileID " << fd;
+    Trace("Open file " << path << " with FileID " << fd);
 
     return fd;
 }
@@ -66,7 +66,7 @@ void FileSystem::CloseFile(FileID fd) {
         throw FileSystemError{"Close FD {} with non-zero return value {}; Error #{}: {}",
                               fd, close_status, errno, errmsg};
     }
-    TraceLog << "Close file @" << fd;
+    Trace("Close file @" << fd);
 }
 
 void FileSystem::MakeDirectory(const std::string &path, bool exist_ok) {
@@ -79,10 +79,10 @@ void FileSystem::MakeDirectory(const std::string &path, bool exist_ok) {
                 };
             } else {
                 std::filesystem::create_directory(path);
-                TraceLog << "Make directory (exist_ok=true) (created)" << path;
+                Trace("Make directory (exist_ok=true) (created)" << path);
             }
         } else {
-            TraceLog << "Make directory (exist_ok=true) (existed)" << path;
+            Trace("Make directory (exist_ok=true) (existed)" << path);
         }
     } else {
         if (std::filesystem::exists(path)) {
@@ -92,13 +92,13 @@ void FileSystem::MakeDirectory(const std::string &path, bool exist_ok) {
             };
         }
         std::filesystem::create_directory(path);
-        TraceLog << "Make directory (exist_ok=false) " << path;
+        Trace("Make directory (exist_ok=false) " << path);
     }
 }
 
 void FileSystem::RemoveDirectory(const std::string &path) {
     std::filesystem::remove_all(path);
-    TraceLog << "Remove directory " << path;
+    Trace("Remove directory " << path);
 }
 
 FileID FileSystem::NewFile(const std::string &path) {
@@ -111,13 +111,13 @@ FileID FileSystem::NewFile(const std::string &path) {
         throw FileSystemError{"Create file {} with non-zero returns value {}; Error #{}: {}",
                               path, fd, errno, errmsg};
     }
-    TraceLog << "Create file " << path << " with FileID @" << fd;
+    Trace("Create file " << path << " with FileID @" << fd);
     return fd;
 }
 
 void FileSystem::RemoveFile(const std::string &path) {
     std::filesystem::remove(path);
-    TraceLog << "Remove file " << path;
+    Trace("Remove file " << path);
 }
 
 

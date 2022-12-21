@@ -14,6 +14,7 @@
 #include <node/JoinNode.h>
 #include <node/ProjectNode.h>
 #include <node/AggregateNode.h>
+#include <node/OffsetLimitNode.h>
 
 #include <magic_enum.hpp>
 
@@ -366,11 +367,29 @@ antlrcpp::Any DBVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) 
         }
     }
 
-
+    // insert AggregateNode or ProjectNode
     if (has_aggregator) {
         root = std::make_shared<AggregateNode>(root, std::move(columns), group_by_col, std::move(target));
     } else {
         root = std::make_shared<ProjectNode>(root, std::move(target));
+    }
+
+    // insert OffsetLimitNode if possible
+    if (ctx->Integer(0)) {
+        auto limit_ctx{ctx->Integer(0)};
+        auto offset_ctx{ctx->Integer(1)};
+        auto limit_val{std::stoi(limit_ctx->getText())};
+        if (limit_val < 0) {
+            throw OperationError{"Invalid limit value {}", limit_val};
+        }
+        int offset_val{0};
+        if (offset_ctx) {
+            offset_val = std::stoi(offset_ctx->getText());
+        }
+        if (offset_val < 0) {
+            throw OperationError{"Invalid offset value {}", offset_val};
+        }
+        root = std::make_shared<OffsetLimitNode>(root, limit_val, offset_val);
     }
 
     selected_tables_stack.pop();

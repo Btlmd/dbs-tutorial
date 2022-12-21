@@ -34,7 +34,7 @@ def display_query(idx, q):
 
 def to_query_lines(_queries_raw):
     _queries = map(str.strip, _queries_raw.split(";"))
-    _queries = filter(lambda x: x, _queries)
+    _queries = filter(lambda x: x and not x.startswith("--"), _queries)
     _queries = map(lambda x: x + ";", _queries)
     _queries = list(_queries)
     return _queries
@@ -83,6 +83,8 @@ if __name__ == "__main__":
 
     fail = False
 
+    failures = []
+
     for idx, (q, m, d) in enumerate(zip(queries, mysql_results, dbms_results)):
         display_query(idx, q)
         if d['type'] == 'record_table':
@@ -96,6 +98,7 @@ if __name__ == "__main__":
                 print(len(m), len(d))
                 fail = True
                 print("[FAIL]")
+                failures.append((idx, q))
             else:
                 print(len(m), "row(s) in set")
                 print("[PASS]")
@@ -106,6 +109,10 @@ if __name__ == "__main__":
             else:
                 print(d['resp'])
         print()
+
+    print("failed queries")
+    for idx, q in failures:
+        print("%d: %s" % (idx, q))
 
     if fail:
         exit(1)

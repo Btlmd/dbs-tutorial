@@ -69,7 +69,7 @@ SlotID DataPage::Insert(std::shared_ptr<Record> record) {
     header.free_space -= record_size + sizeof(SlotID);
     assert(header.free_space >= 0);
     page->SetDirty();
-    TraceLog << "Insert " << " @" << page->fd << " #" << page->id << " Slot " << header.slot_count << " : "
-             << record->Repr();
+    Trace("Insert " << " @" << page->fd << " #" << page->id << " Slot " << header.slot_count << " : "
+             << record->Repr());
     return header.slot_count++;
 }

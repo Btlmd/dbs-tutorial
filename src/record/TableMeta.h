@@ -87,13 +87,13 @@ public:
               BufferSystem &buffer)
             : table_id{table_id}, table_name{std::move(table_name)}, fd{fd}, data_page_count{page_count},
               field_meta{std::move(field_meta)}, buffer{buffer} {
-        TraceLog << fmt::format("TableMeta ({}, {}) is assigned with fd {}", this->table_id, this->table_name, fd);
+        Trace(fmt::format("TableMeta ({}, {}) is assigned with fd {}", this->table_id, this->table_name, fd));
     }
 
     TableMeta(FileID fd, BufferSystem &buffer) : fd{fd}, buffer{buffer} {}
 
     ~TableMeta(){
-        TraceLog << fmt::format("TableMeta ({}, {}) destroyed", table_id, table_name);
+        Trace(fmt::format("TableMeta ({}, {}) destroyed", table_id, table_name));
     }
 private:
 

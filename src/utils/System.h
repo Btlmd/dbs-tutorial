@@ -61,7 +61,7 @@ ResultList ToResultList(const std::string &in_string, DBVisitor &visitor) {
     if (parser.getNumberOfSyntaxErrors() > 0) {
         throw OperationError{"Syntax Error"};
     }
-    TraceLog << "Syntax Tree:" << tree->toStringTree(&parser);
+    Trace("Syntax Tree:" << tree->toStringTree(&parser));
     auto results{tree->accept(&visitor)};
     auto &result_list{*results.as<std::shared_ptr<ResultList>>()};
     return result_list;

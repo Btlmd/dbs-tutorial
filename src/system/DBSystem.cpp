@@ -61,7 +61,7 @@ std::shared_ptr<Result> DBSystem::UseDatabase(const std::string &db_name) {
     if (on_use) {
         CloseDatabase();
     }
-    TraceLog << "Opening dataset " << db_name;
+    Trace("Opening dataset " << db_name);
     on_use = true;
     /**
      * Table File Structure
@@ -120,7 +120,7 @@ void DBSystem::CloseDatabase() {
     assert(!current_database.empty());
     assert(on_use);
 
-    TraceLog << "Closing database " << current_database;
+    Trace("Closing database " << current_database);
 
     // Update table_info
     auto table_info_page = buffer.ReadPage(table_info_fd, 0);
@@ -471,7 +471,8 @@ std::shared_ptr<OpNode> DBSystem::GetTrivialScanNode(TableID table_id, const std
 }
 
 std::shared_ptr<Result> DBSystem::Select(const std::vector<std::string> &header, const std::shared_ptr<OpNode> &plan) {
-    return std::make_shared<TableResult>(header, plan->All());
+    auto records{plan->All()};
+    return std::make_shared<TableResult>(header, std::move(records));
 }
 
 std::shared_ptr<Result> DBSystem::Insert(TableID table_id, RecordList &records) {

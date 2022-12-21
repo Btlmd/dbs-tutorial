@@ -211,7 +211,7 @@ public:
         boost::replace_all(input_pattern, "_", ".");
         input_pattern = "^" + input_pattern + "$";
 
-        TraceLog << "LikeCondition constructed as " << input_pattern;
+        Trace("LikeCondition constructed as " << input_pattern);
 
         pattern = input_pattern;
     }
