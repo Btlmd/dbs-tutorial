@@ -75,7 +75,7 @@ public:
     FieldMetaTable field_meta;
     std::shared_ptr<PrimaryKey> primary_key{nullptr};
     std::vector<std::shared_ptr<ForeignKey>> foreign_keys;
-    std::vector<std::shared_ptr<IndexKey>> index_keys;
+    std::vector<std::shared_ptr<IndexKey>> index_keys;  // （table id + fields）
 
     /**
      * Write TableMeta to file

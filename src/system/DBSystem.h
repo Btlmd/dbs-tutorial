@@ -6,6 +6,7 @@
 #define DBS_TUTORIAL_DBSYSTEM_H
 
 #include <vector>
+#include <algorithm>
 #include <string>
 #include <memory>
 #include <unordered_map>
@@ -53,8 +54,11 @@ public:
     std::shared_ptr<Result> DropPrimaryKey(const std::string &table_name);
 
     std::shared_ptr<Result> AddIndex(const std::string &table_name, const std::vector<std::string> &field_name);
+    std::shared_ptr<Result> AddIndex(TableID table_id, const std::vector<FieldID>& field_ids, bool is_user);
 
     std::shared_ptr<Result> DropIndex(const std::string &table_name, const std::vector<std::string> &field_name);
+    std::shared_ptr<Result> DropIndex(TableID table_id, const std::vector<FieldID>& field_ids, bool is_user);
+
 
     /**
      * Delete records satisfying `cond`

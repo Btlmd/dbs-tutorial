@@ -16,9 +16,9 @@ endif()
 
 #set(CMAKE_CXX_FLAGS "-Wall -Wextra")
 #set(CMAKE_CXX_FLAGS_DEBUG "-g")
-set(CMAKE_CXX_FLAGS_DEBUG "-pg")
+#set(CMAKE_CXX_FLAGS_DEBUG "-pg")
 #set(CMAKE_CXX_FLAGS_DEBUG "-O0")
-set(CMAKE_CXX_FLAGS_DEBUG "-O3")
+#set(CMAKE_CXX_FLAGS_DEBUG "-O3")
 
 # Libraries
     # From conan
