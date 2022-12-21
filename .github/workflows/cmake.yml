@@ -37,6 +37,7 @@ jobs:
         g++ --version
         cmake --version        
         java -version
+        nproc
 
     - name: Configure GCC/G++ 11
       run: |
@@ -47,7 +48,7 @@ jobs:
 
     - name: Configure Dependencies
       run: |
-        sudo apt-get install python3-dev
+        sudo apt-get install python3.9-dev
         sudo apt-get install libboost-all-dev
         pip install -r requirements.txt
         conan profile new default --detect
@@ -61,7 +62,7 @@ jobs:
       run: cmake -B ${{env.BUILD_DIR}} -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
 
     - name: Build
-      run: cmake --build ${{env.BUILD_DIR}} --config ${{env.BUILD_TYPE}}
+      run: cmake --build ${{env.BUILD_DIR}} --config ${{env.BUILD_TYPE}} -j $(nproc)
 
     - name: Test
       working-directory: ${{env.BUILD_DIR}}
