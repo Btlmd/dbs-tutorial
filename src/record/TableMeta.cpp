@@ -25,7 +25,7 @@
 
 
 std::shared_ptr<TableMeta> TableMeta::FromSrc(FileID fd, BufferSystem &buffer) {
-    auto ret{std::make_shared<TableMeta>(buffer)};
+    auto ret{std::make_shared<TableMeta>(fd, buffer)};
     PageID page_id{-1};
     Page *page;
     const uint8_t *src;
@@ -58,43 +58,39 @@ std::shared_ptr<TableMeta> TableMeta::FromSrc(FileID fd, BufferSystem &buffer) {
     }
 
     // Foreign Keys
-    FieldID fk_loaded{0};
-    while (fk_loaded < fk_count) {
-        NextPage();
-        for (FieldID j{0}; j < FK_PER_PAGE && fk_loaded < fk_count; ++j) {
-            ForeignKey fk;
-            read_var(src, fk);
-            ret->foreign_keys.push_back(std::make_shared<ForeignKey>(fk));
-            ++fk_loaded;
+    for (FieldID i{0}; i < fk_count; ++i) {
+        if (i % FK_PER_PAGE == 0) {
+            NextPage();
         }
+        ForeignKey fk;
+        read_var(src, fk);
+        ret->foreign_keys.push_back(std::make_shared<ForeignKey>(fk));
     }
 
     // Index Keys
-    FieldID index_loaded{0};
-    while (index_loaded < index_count) {
-        NextPage();
-        // TODO
+    for (FieldID i{0}; i < index_count; ++i) {
+        if (i % IK_PER_PAGE == 0) {
+            NextPage();
+        }
+        IndexKey fk;
+        read_var(src, fk);
+        ret->index_keys.push_back(std::make_shared<IndexKey>(fk));
     }
 
-
     // Fields
-    FieldID field_loaded{0};
-    while (field_loaded < field_count) {
-        NextPage();
-
-        FieldID pg_field_meta_cnt;
-        read_var(src, pg_field_meta_cnt);
-
-        for (FieldID j{0}; j < pg_field_meta_cnt; ++j) {
-            ret->field_meta.Insert(FieldMeta::FromSrc(src));
-            ++field_loaded;
+    for (FieldID j{0}; j < field_count; ++j) {
+        if (j % FIELD_PER_PAGE == 0) {
+            NextPage();
         }
+        ret->field_meta.Insert(FieldMeta::FromSrc(src));
     }
 
     return ret;
 }
 
 void TableMeta::Write() {
+    buffer.ReleaseFile(fd);
+
     PageID page_id{-1};
     Page *page;
     uint8_t *page_end;
@@ -102,12 +98,11 @@ void TableMeta::Write() {
 
     auto NextPage{[&]() {
         ++page_id;
-        page = buffer.ReadPage(fd, page_id);
+        page = buffer.CreatePage(fd, page_id);
         page->SetDirty();
         dst = page->data;
         page_end = page->data + PAGE_SIZE;
     }};
-
 
     // Fixed Info
     NextPage();
@@ -117,7 +112,7 @@ void TableMeta::Write() {
     write_var(dst, static_cast<FieldID>(field_meta.Count()));
     write_var(dst, static_cast<FieldID>(foreign_keys.size()));
     write_var(dst, static_cast<FieldID>(index_keys.size()));
-    write_var(dst, bool(primary_key == nullptr));
+    write_var(dst, bool(primary_key != nullptr));
     if (primary_key != nullptr) {
         write_var(dst, *primary_key);
     }
@@ -132,32 +127,18 @@ void TableMeta::Write() {
 
     // Index Keys
     for (FieldID i{0}; i < index_keys.size(); ++i) {
-        // TODO
+        if (i % IK_PER_PAGE == 0) {
+            NextPage();
+        }
+        write_var(dst, *index_keys[i]);
     }
 
     // Fields
-    FieldID fields_written;
-    auto EndThisPage{[&]() {
-        uint8_t *header{page->data};
-        write_var(header, fields_written);  // mark written field count
-    }};
-
-    auto TurnNewPage{[&]() {
-        NextPage();
-        dst += sizeof(fields_written);  // skip field_count
-        fields_written = 0;
-    }};
-
-    TurnNewPage();
     for (FieldID i{0}; i < field_meta.meta.size(); ++i) {
-        auto &f{field_meta.meta[i]};
-        auto end_pos{dst + f->Size()};
-        if (end_pos > page_end) {
-            EndThisPage();
-            TurnNewPage();
+        if (i % FIELD_PER_PAGE == 0) {
+            NextPage();
         }
+        auto &f{field_meta.meta[i]};
         f->Write(dst);
-        ++fields_written;
     }
-    EndThisPage();
 }

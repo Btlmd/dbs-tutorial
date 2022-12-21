@@ -14,6 +14,7 @@
 #include <node/JoinNode.h>
 #include <node/ProjectNode.h>
 #include <node/AggregateNode.h>
+#include <node/OffsetLimitNode.h>
 
 #include <magic_enum.hpp>
 
@@ -93,17 +94,17 @@ antlrcpp::Any DBVisitor::visitCreate_table(SQLParser::Create_tableContext *ctx) 
                 max_size = max_len_raw;
             }
 
-            auto new_field_meta{std::make_shared<FieldMeta>(FieldMeta{
-                    .type{field_type},
-                    .name{field_name},
-                    .field_id{field_id_counter++},
+            auto new_field_meta{std::make_shared<FieldMeta>(
+                    field_type,
+                    field_name,
+                    field_id_counter++,
+                    max_size,
+                    false,
+                    not_null != nullptr,
+                    false,
+                    nullptr
+            )};
 
-                    .max_size{max_size},
-                    .unique{false},
-                    .not_null{not_null != nullptr},
-                    .has_default{false},
-                    .default_value{nullptr},
-            })};
 
             // default value config
             if (nf->value()) {
@@ -137,7 +138,7 @@ antlrcpp::Any DBVisitor::visitCreate_table(SQLParser::Create_tableContext *ctx) 
         auto pk{dynamic_cast<SQLParser::Primary_key_fieldContext *>(field_ctx)};
         if (pk) {
             if (raw_pk) {
-                throw OperationError{"Multiple primary key defined"};
+                throw OperationError{"Multiple primary keys defined"};
             }
             std::string pk_name;
             if (pk->Identifier()) {
@@ -159,7 +160,7 @@ antlrcpp::Any DBVisitor::visitCreate_table(SQLParser::Create_tableContext *ctx) 
 }
 
 antlrcpp::Any DBVisitor::visitDrop_table(SQLParser::Drop_tableContext *ctx) {
-    return SQLBaseVisitor::visitDrop_table(ctx);
+    return system.DropTable(ctx->Identifier()->getText());
 }
 
 antlrcpp::Any DBVisitor::visitField_list(SQLParser::Field_listContext *ctx) {
@@ -366,11 +367,29 @@ antlrcpp::Any DBVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) 
         }
     }
 
-
+    // insert AggregateNode or ProjectNode
     if (has_aggregator) {
         root = std::make_shared<AggregateNode>(root, std::move(columns), group_by_col, std::move(target));
     } else {
         root = std::make_shared<ProjectNode>(root, std::move(target));
+    }
+
+    // insert OffsetLimitNode if possible
+    if (ctx->Integer(0)) {
+        auto limit_ctx{ctx->Integer(0)};
+        auto offset_ctx{ctx->Integer(1)};
+        auto limit_val{std::stoi(limit_ctx->getText())};
+        if (limit_val < 0) {
+            throw OperationError{"Invalid limit value {}", limit_val};
+        }
+        int offset_val{0};
+        if (offset_ctx) {
+            offset_val = std::stoi(offset_ctx->getText());
+        }
+        if (offset_val < 0) {
+            throw OperationError{"Invalid offset value {}", offset_val};
+        }
+        root = std::make_shared<OffsetLimitNode>(root, limit_val, offset_val);
     }
 
     selected_tables_stack.pop();
@@ -482,6 +501,20 @@ DBVisitor::GetValue(SQLParser::ValueContext *ctx, const std::shared_ptr<FieldMet
         }
     }
 
+//    auto date_p{ctx->Date()};
+//    if (date_p) {
+//        if (selected_field->type == FieldType::DATE) {
+//            return std::make_shared<Date>(date_p->getText());
+//        } else {
+//            auto type_name{magic_enum::enum_name(selected_field->type)};
+//            throw OperationError{
+//                    "Incompatible type; Expecting {} for column {}, got DATE instead",
+//                    type_name,
+//                    selected_field->name
+//            };
+//        }
+//    }
+
     auto str_p{ctx->String()};
     if (str_p) {
         std::string str_val{str_p->getText()};
@@ -496,7 +529,9 @@ DBVisitor::GetValue(SQLParser::ValueContext *ctx, const std::shared_ptr<FieldMet
                 throw OperationError{"Data too long for column `{}`", selected_field->name,};
             }
             return std::make_shared<VarChar>(str_val);
-        } else {
+        } if (selected_field->type == FieldType::DATE) {
+            return std::make_shared<Date>(str_val);
+        }else {
             auto type_name{magic_enum::enum_name(selected_field->type)};
             throw OperationError{
                     "Incompatible type; Expecting {} for column {}, got STRING instead",
@@ -536,7 +571,9 @@ antlrcpp::Any DBVisitor::visitWhere_operator_select(SQLParser::Where_operator_se
     auto table_id{col->table_id};
     auto field_meta{col->field_meta};
     auto select_plan{ctx->select_table()->accept(this).as<SelectPlan>()};
-    return make_cond<EqualToSubQueryCondition>(select_plan, table_id, field_meta->field_id);
+    return make_cond<CompareSubQueryCondition>(
+            select_plan, table_id, field_meta->field_id, ConvertOperator(ctx->operator_())
+    );
 }
 
 antlrcpp::Any DBVisitor::visitWhere_null(SQLParser::Where_nullContext *ctx) {
@@ -727,12 +764,13 @@ antlrcpp::Any DBVisitor::visitAlter_drop_index(SQLParser::Alter_drop_indexContex
     auto table_name{ctx->Identifier()->getText()};
 
     std::vector<std::string> indexed_fields;
-    std::transform(
-        ctx->identifiers()->Identifier().begin(),
-        ctx->identifiers()->Identifier().end(),
-        std::back_inserter(indexed_fields),
-        [](auto id) { return id->getText(); }
-    );
+    std::transform(ctx->identifiers()->Identifier().begin(), ctx->identifiers()->Identifier().end(),
+                   std::back_inserter(indexed_fields), [](auto id) { return id->getText(); });
 
     return system.DropIndex(table_name, indexed_fields);
+}
+
+
+antlrcpp::Any DBVisitor::visitShow_tables(SQLParser::Show_tablesContext *ctx) {
+    return system.ShowTables();
 }

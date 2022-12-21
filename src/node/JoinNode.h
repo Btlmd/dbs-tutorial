@@ -32,7 +32,7 @@ public:
         RecordList ret;
         for (const auto &lhs_record: lhs) {
             for (const auto &rhs_record: rhs) {
-//                TraceLog << "Join on " << lhs_record->Repr() << " with " << rhs_record->Repr();
+//                Trace("Join on " << lhs_record->Repr() << " with " << rhs_record->Repr());
                 if (cond == nullptr || (*cond)(lhs_record, rhs_record)) {
                     auto joined_record{std::make_shared<Record>()};
                     std::move(lhs_record->fields.cbegin(), lhs_record->fields.cend(),
@@ -40,9 +40,9 @@ public:
                     std::copy(rhs_record->fields.cbegin(), rhs_record->fields.cend(),
                               std::back_inserter(joined_record->fields));
                     ret.push_back(std::move(joined_record));
-//                    TraceLog << "- true";
+//                    Trace("- true");
                 } else {
-//                    TraceLog << " - false";
+//                    Trace(" - false");
                 }
             }
         }

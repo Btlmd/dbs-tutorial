@@ -49,7 +49,7 @@ public:
         if (size > 0) {
             return size;
         }
-        auto _size{static_cast<RecordSize>((fields.size() + 7) / 8)};  // offset of null bitmap
+        auto _size{static_cast<RecordSize>((fields.size() + 7) / 8 + sizeof(RecordSize))};  // offset of null bitmap + record_size
         for (const auto &f: fields) {
             if (!f->is_null) {
                 _size += f->Size();
@@ -100,6 +100,15 @@ public:
      */
     [[nodiscard]] std::string Repr() const {
         return "(" + boost::algorithm::join(ToString(), ", ") + ")";
+    }
+
+    bool operator == (const Record& rhs) const {
+        assert(rhs.fields.size() == fields.size());
+        for (FieldID i{0}; i < fields.size(); ++i) {
+            if (fields[i] == rhs.fields[i])
+                return false;
+        }
+        return true;
     }
 
 #endif

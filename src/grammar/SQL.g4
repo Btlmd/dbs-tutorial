@@ -87,6 +87,7 @@ type_
     | 'VARCHAR' '(' Integer ')'
     | 'FLOAT'
     | 'CHAR' '(' Integer ')'
+    | 'DATE'
     ;
 
 value_lists

@@ -10,8 +10,8 @@
 int main() {
     init_logger();
 
-    FileSystem::MakeDirectory(DB_DIR);
-    std::filesystem::remove_all(DB_DIR);
+//    FileSystem::MakeDirectory(DB_DIR);
+//    std::filesystem::remove_all(DB_DIR);
 
     auto dbms = DBSystem{};
     DBVisitor visitor{dbms};

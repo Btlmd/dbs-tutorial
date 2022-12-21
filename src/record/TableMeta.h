@@ -87,11 +87,15 @@ public:
     TableMeta(TableID table_id, std::string table_name, PageID page_count, FieldMetaTable field_meta, FileID fd,
               BufferSystem &buffer)
             : table_id{table_id}, table_name{std::move(table_name)}, fd{fd}, data_page_count{page_count},
-              field_meta{std::move(field_meta)}, buffer{buffer} {}
+              field_meta{std::move(field_meta)}, buffer{buffer} {
+        Trace(fmt::format("TableMeta ({}, {}) is assigned with fd {}", this->table_id, this->table_name, fd));
+    }
 
-    explicit TableMeta(BufferSystem &buffer) : buffer{buffer} {}
+    TableMeta(FileID fd, BufferSystem &buffer) : fd{fd}, buffer{buffer} {}
 
-    ~TableMeta() = default;
+    ~TableMeta(){
+        Trace(fmt::format("TableMeta ({}, {}) destroyed", table_id, table_name));
+    }
 private:
 
     BufferSystem &buffer;
@@ -101,5 +105,7 @@ private:
 
 
 constexpr int FK_PER_PAGE{PAGE_SIZE / sizeof(ForeignKey)};
+constexpr int IK_PER_PAGE{PAGE_SIZE / sizeof(IndexKey)};
+constexpr int FIELD_PER_PAGE{1};
 
 #endif //DBS_TUTORIAL_TABLEMETA_H

@@ -79,5 +79,11 @@ constexpr char LOGGING_PATTERN[]{"{:%Y_%m_%d_%H:%M:%S}.log"};
 #define WarningLog BOOST_LOG_TRIVIAL(warning)
 #define ErrorLog BOOST_LOG_TRIVIAL(error)
 
+// Fix for logging
+// Use regex replace: TraceLog *<< *(.*?); -> Trace($1);
+// enable log
+//#define Trace(x) TraceLog << x
+// disable log
+#define Trace(x) void(0)
 
 #endif //DBS_TUTORIAL_DEFINES_H

@@ -11,6 +11,7 @@
 #include <vector>
 #include <chrono>
 #include <ctime>
+#include <filesystem>
 
 #include <antlr4-runtime.h>
 #include <cpp-terminal/input.hpp>
@@ -60,7 +61,7 @@ ResultList ToResultList(const std::string &in_string, DBVisitor &visitor) {
     if (parser.getNumberOfSyntaxErrors() > 0) {
         throw OperationError{"Syntax Error"};
     }
-    TraceLog << "Syntax Tree:" << tree->toStringTree(&parser);
+    Trace("Syntax Tree:" << tree->toStringTree(&parser));
     auto results{tree->accept(&visitor)};
     auto &result_list{*results.as<std::shared_ptr<ResultList>>()};
     return result_list;
@@ -71,7 +72,7 @@ void inline process_input(const std::string &in_string, DBVisitor &visitor) {
     try {
         auto result_list{ToResultList(in_string, visitor)};
         for (auto &result_ptr: result_list) {
-            std::cout << result_ptr->ToString() << std::endl;
+            std::cout << result_ptr->Display() << std::endl;
             std::cout.flush();
         }
     } catch (const OperationError &e) {

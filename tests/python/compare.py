@@ -2,6 +2,8 @@ import pymysql
 from argparse import ArgumentParser
 import connect_db
 import decimal
+import datetime
+from pathlib import Path
 
 def round_resp(rows):
     rows = list(map(list, rows))
@@ -11,6 +13,8 @@ def round_resp(rows):
                 row[i] = float(row[i])
             if isinstance(row[i], float):
                 row[i] = round(row[i], 3)
+            if isinstance(row[i], datetime.date):
+                row[i] = str(row[i])
     rows = sorted(rows)
     return rows
 
@@ -28,6 +32,13 @@ def tidy_display(rows):
 def display_query(idx, q):
     print("[QUERY %d]" % idx, q)
 
+def to_query_lines(_queries_raw):
+    _queries = map(str.strip, _queries_raw.split(";"))
+    _queries = filter(lambda x: x and not x.startswith("--"), _queries)
+    _queries = map(lambda x: x + ";", _queries)
+    _queries = list(_queries)
+    return _queries
+
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument('--host', type=str, default='127.0.0.1')
@@ -43,10 +54,8 @@ if __name__ == "__main__":
 
     with open(args.sql, "r") as f:
         queries_raw = f.read()
-        queries = map(str.strip, queries_raw.split(";"))
-        queries = filter(lambda x: x, queries)
-        queries = map(lambda x: x + ";", queries)
-        queries = list(queries)
+        queries = to_query_lines(queries_raw)
+
 
     # get results from `dbs-tutorial`
     dbms_results = connect_db.query(queries_raw)
@@ -56,9 +65,12 @@ if __name__ == "__main__":
     mysql_results = []
     print("Executing MySQL queries ..")
     with connection:
-        with connection.cursor() as cursor:
-            cursor.execute("DROP DATABASE IF EXISTS test_db;")
-            connection.commit()
+        with open(Path(args.sql).parent / 'mysql_init.sql', 'r') as f:
+            mysql_init_queries = to_query_lines(f.read())
+        for q in mysql_init_queries:
+            with connection.cursor() as cursor:
+                cursor.execute(q)
+                connection.commit()
 
         for idx, q in enumerate(queries):
             display_query(idx, q)
@@ -70,6 +82,8 @@ if __name__ == "__main__":
     print(len(queries), len(mysql_results), len(dbms_results))
 
     fail = False
+
+    failures = []
 
     for idx, (q, m, d) in enumerate(zip(queries, mysql_results, dbms_results)):
         display_query(idx, q)
@@ -84,6 +98,7 @@ if __name__ == "__main__":
                 print(len(m), len(d))
                 fail = True
                 print("[FAIL]")
+                failures.append((idx, q))
             else:
                 print(len(m), "row(s) in set")
                 print("[PASS]")
@@ -94,6 +109,10 @@ if __name__ == "__main__":
             else:
                 print(d['resp'])
         print()
+
+    print("failed queries")
+    for idx, q in failures:
+        print("%d: %s" % (idx, q))
 
     if fail:
         exit(1)

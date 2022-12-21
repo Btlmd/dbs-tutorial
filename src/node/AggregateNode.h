@@ -74,9 +74,9 @@ public:
 
 //#ifdef DEBUG
 //        {
-//            TraceLog << "Aggregation: sorted records";
+//            Trace("Aggregation: sorted records");
 //            for (const auto &r: records) {
-//                TraceLog << boost::algorithm::join(r->ToString(), ", ");
+//                Trace(boost::algorithm::join(r->ToString(), ", "));
 //            }
 //
 //        };
@@ -100,7 +100,7 @@ public:
                     )
                     ) {
                 ++boarder;
-//                TraceLog << "Aggregate ptr step";
+//                Trace("Aggregate ptr step");
             }
 
             // aggregate in the segment

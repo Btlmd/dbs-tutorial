@@ -211,7 +211,7 @@ public:
         boost::replace_all(input_pattern, "_", ".");
         input_pattern = "^" + input_pattern + "$";
 
-        TraceLog << "LikeCondition constructed as " << input_pattern;
+        Trace("LikeCondition constructed as " << input_pattern);
 
         pattern = input_pattern;
     }
@@ -275,15 +275,16 @@ public:
 };
 
 /**
- * Equal to subquery condition
+ * compare with a subquery condition
  */
-class EqualToSubQueryCondition : public FilterCondition {
+class CompareSubQueryCondition : public FilterCondition {
 public:
     FieldID field_position;
     std::shared_ptr<Field> value;
+    std::shared_ptr<Cmp> cmp;
 
-    EqualToSubQueryCondition(const SelectPlan &select_plan, TableID table_id, FieldID pos) :
-            FilterCondition{table_id}, field_position{pos} {
+    CompareSubQueryCondition(const SelectPlan &select_plan, TableID table_id, FieldID pos, std::shared_ptr<Cmp> cmp) :
+            FilterCondition{table_id}, field_position{pos}, cmp{std::move(cmp)} {
         auto value_list{ToValueList(select_plan)};
         if (value_list.size() > 1) {
             throw OperationError{"Subquery returns more than 1 row"};
@@ -299,9 +300,8 @@ public:
         if (value == nullptr) {
             return false;
         }
-        EqCmp comparer;
         const auto &record_field{record->fields[field_position]};
-        return comparer(record_field, value);
+        return (*cmp)(record_field, value);
     }
 
 };

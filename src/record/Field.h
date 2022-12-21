@@ -10,6 +10,8 @@
 #include <cstring>
 #include <compare>
 
+#include <boost/algorithm/string.hpp>
+
 #include <defines.h>
 #include <utils/Serialization.h>
 #include <exception/OperationException.h>
@@ -20,6 +22,7 @@ enum class FieldType {
     FLOAT = 2,
     CHAR = 3,
     VARCHAR = 4,
+    DATE = 5
 };
 
 class PrimaryKey {
@@ -41,8 +44,22 @@ public:
 class IndexKey {
    public:
     FieldID field_count{0};
-    FieldID fields[MAX_FIELD_COUNT];
     int reference_count{0};
+    bool can_drop{true};  // Whether it can be dropped directly. If index added by user manually, then true.
+                            // Else index was added by other key constraints, false.
+    FieldID fields[MAX_FIELD_COUNT];
+
+    bool operator==(const IndexKey &other) const {
+        if (field_count != other.field_count) {
+            return false;
+        }
+        for (int i = 0; i < field_count; ++i) {
+            if (fields[i] != other.fields[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
 };
 
 class Field {
@@ -176,18 +193,84 @@ public:
         write_var(dst, value);
     }
 
-    std::shared_ptr<Float> ToFloat() const {
+    [[nodiscard]] std::shared_ptr<Float> ToFloat() const {
         return std::make_shared<Float>(value);
     }
 };
 
-class String: public Field {
+class Date : public Field {
+public:
+    int value;
+
+    static int StringToDateInt(const std::string &date_format) {
+        std::vector<std::string> result;
+        boost::split(result, date_format, boost::is_any_of("-"));
+        int value{0};
+        if (result.size() == 3) {
+            value += std::stoi(result[0]) * 1'0000;
+            value += std::stoi(result[1]) * 100;
+            value += std::stoi(result[2]);
+            return value;
+        } else {
+            throw OperationError{"Invalid date string {}", date_format};
+        }
+    }
+
+    static std::string DateIntToString(int value) {
+        return fmt::format(
+                "{:04d}-{:02d}-{:02d}",
+                value % 1'0000'0000 / 1'0000,
+                value % 1'0000 / 100,
+                value % 100
+        );
+    }
+
+    explicit Date(int value) : Field{FieldType::DATE}, value{value} {}
+
+    explicit Date(const std::string &date_format) : Field{FieldType::DATE}, value{StringToDateInt(date_format)} {}
+
+    static std::shared_ptr<Date> FromSrc(const uint8_t *&src) {
+        int value;
+        read_var(src, value);
+        return std::make_shared<Date>(value);
+    }
+
+    std::partial_ordering operator<=>(const Field &rhs) const override {
+        if (is_null || rhs.is_null) {
+            return std::partial_ordering::unordered;
+        }
+        auto date_rhs{dynamic_cast<const Date &>(rhs)};
+        return value <=> date_rhs.value;
+    }
+
+    bool operator==(const Field &rhs) const override {
+        if (is_null || rhs.is_null) {
+            return false;
+        }
+        auto date_rhs{dynamic_cast<const Date &>(rhs)};
+        return value == date_rhs.value;
+    }
+
+    [[nodiscard]] RecordSize Size() const override {
+        return sizeof(value);
+    }
+
+    [[nodiscard]] std::string ToString() const override {
+        return DateIntToString(value);
+    }
+
+    void Write(uint8_t *&dst) const override {
+        write_var(dst, value);
+    }
+};
+
+class String : public Field {
 public:
     std::string data;
 
-    explicit String(std::string str_data): data{std::move(str_data)}, Field{FieldType::INVALID} {}
+    explicit String(std::string str_data) : data{std::move(str_data)}, Field{FieldType::INVALID} {}
 
-    explicit String(std::string str_data, FieldType field_type): data{std::move(str_data)}, Field{field_type} {}
+    explicit String(std::string str_data, FieldType field_type) : data{std::move(str_data)}, Field{field_type} {}
 
     std::partial_ordering operator<=>(const Field &rhs) const override {
         if (is_null || rhs.is_null) {
@@ -254,7 +337,7 @@ public:
      * Caller should ensure that the data is valid, i.e. data.size() <= max_size
      * @param str_data
      */
-    explicit VarChar(std::string str_data): String{std::move(str_data), FieldType::VARCHAR} {}
+    explicit VarChar(std::string str_data) : String{std::move(str_data), FieldType::VARCHAR} {}
 
     ~VarChar() = default;
 
@@ -275,6 +358,26 @@ public:
 
 class FieldMeta {
 public:
+    FieldMeta() = default;
+
+    FieldMeta(
+            FieldType type,
+            std::string name,
+            FieldID field_id,
+            RecordSize max_size = -1,
+            bool unique = false,
+            bool not_null = false,
+            bool has_default = false,
+            std::shared_ptr<Field> default_value = nullptr
+    ) : type{type},
+        name{std::move(name)},
+        field_id{field_id},
+        max_size{max_size},
+        unique{unique},
+        not_null{not_null},
+        has_default{has_default},
+        default_value{default_value} {}
+
     FieldType type;
     std::string name;
     FieldID field_id;
@@ -285,21 +388,13 @@ public:
     bool has_default{false};
     std::shared_ptr<Field> default_value{nullptr};
 
-    [[nodiscard]] RecordSize Size() const {
-        RecordSize base_size = sizeof(type) + name.size() + sizeof(RecordSize) + sizeof(max_size)
-                             + sizeof(unique) + sizeof(not_null) + sizeof(has_default);
-        if (has_default) {
-            base_size += default_value->Size();
-        }
-        return base_size;
-    }
-
     static std::shared_ptr<FieldMeta> FromSrc(const uint8_t *&src) {
         const uint8_t *start_point{src};  // be optimized ifndef DEBUG
         auto meta{std::make_shared<FieldMeta>()};
         read_var(src, meta->type);
         read_string(src, meta->name);
         read_var(src, meta->max_size);
+        read_var(src, meta->field_id);
         read_var(src, meta->unique);
         read_var(src, meta->not_null);
         read_var(src, meta->has_default);
@@ -315,6 +410,7 @@ public:
         write_var(dst, type);
         write_string(dst, name);
         write_var(dst, max_size);
+        write_var(dst, field_id);
         write_var(dst, unique);
         write_var(dst, not_null);
         write_var(dst, has_default);
@@ -323,6 +419,17 @@ public:
         }
         assert(dst - start_point == Size());
     }
+
+    [[nodiscard]] RecordSize Size() const {
+        auto _size{sizeof(type) + sizeof(max_size) + sizeof(field_id) + sizeof(unique) + sizeof(not_null) + sizeof(has_default)};
+        _size += name.size() + sizeof(RecordSize);
+        if (has_default) {
+            assert(default_value != nullptr);
+            _size += default_value->Size();
+        }
+        return static_cast<RecordSize>(_size);
+    }
+
 };
 
 inline std::shared_ptr<Field> Field::LoadField(FieldType type, const uint8_t *&src, RecordSize max_len) {
@@ -336,6 +443,8 @@ inline std::shared_ptr<Field> Field::LoadField(FieldType type, const uint8_t *&s
             return Char::FromSrc(src, max_len);
         case FieldType::VARCHAR:
             return VarChar::FromSrc(src);
+        case FieldType::DATE:
+            return Date::FromSrc(src);
         default:
             assert(false);
     }
@@ -343,29 +452,54 @@ inline std::shared_ptr<Field> Field::LoadField(FieldType type, const uint8_t *&s
 
 inline std::shared_ptr<Field> Field::MakeNull(FieldType type, RecordSize max_len) {
     switch (type) {
-        case FieldType::INT:{
+        case FieldType::INT: {
             auto int_p{std::make_shared<Int>(0)};
             int_p->is_null = true;
             return int_p;
         }
-        case FieldType::FLOAT:{
+        case FieldType::FLOAT: {
             auto float_p{std::make_shared<Float>(0)};
             float_p->is_null = true;
             return float_p;
         }
-        case FieldType::CHAR:{
+        case FieldType::CHAR: {
             auto char_p{std::make_shared<Char>("", max_len)};
             char_p->is_null = true;
             return char_p;
         }
-        case FieldType::VARCHAR:{
+        case FieldType::VARCHAR: {
             auto varchar_p{std::make_shared<VarChar>("")};
+            varchar_p->is_null = true;
+            return varchar_p;
+        }
+        case FieldType::DATE: {
+            auto varchar_p{std::make_shared<Date>(0)};
             varchar_p->is_null = true;
             return varchar_p;
         }
         default:
             assert(false);
     }
+}
+
+std::shared_ptr<Field> inline operator "" _i(unsigned long long el) {
+    return std::make_shared<Int>(el);
+}
+
+std::shared_ptr<Field> inline operator "" _f(unsigned long long el) {
+    return std::make_shared<Float>(el);
+}
+
+std::shared_ptr<Field> inline operator "" _f(long double el) {
+    return std::make_shared<Float>(el);
+}
+
+std::shared_ptr<Field> inline operator "" _v(const char * el, std::size_t s) {
+    return std::make_shared<VarChar>(std::string{el, s});
+}
+
+std::shared_ptr<Field> inline _ch(std::string data, RecordSize max_l) {
+    return std::make_shared<Char>(data, max_l);
 }
 
 #endif //DBS_TUTORIAL_FIELD_H

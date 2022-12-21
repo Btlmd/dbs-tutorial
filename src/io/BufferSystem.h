@@ -9,11 +9,46 @@
 #include <map>
 #include <list>
 #include <utility>
+#include <set>
+#include <functional>
 
 #include <defines.h>
 #include <io/Page.h>
 #include <io/FileSystem.h>
 
+class FilePageMap: public std::unordered_map<FileID, std::unordered_set<Page *>> {
+public:
+    void mark(FileID fd, Page *pos) {
+        auto set_it{find(fd)};
+        if (set_it == end()) {
+            insert({fd, {pos}});
+        } else {
+            set_it->second.insert(pos);
+        }
+    }
+
+    void drop(FileID fd, Page *pos) {
+        auto set_it{find(fd)};
+        assert(set_it != end());
+        set_it->second.erase(pos);
+    }
+
+    void drop(FileID fd) {
+        auto set_it{find(fd)};
+        if (set_it != end()) {
+            erase(fd);
+        }
+    }
+
+    void apply(FileID fd, const std::function<void(Page *)>& func) const {
+        auto set_it{find(fd)};
+        if (set_it != end()) {
+            for (auto it{set_it->second.begin()}; it != set_it->second.end(); ++it) {
+                func(*it);
+            }
+        }
+    }
+};
 
 class BufferSystem {
 public:
@@ -74,7 +109,7 @@ private:
     Page *buffer_;
 
     // from file descriptor to all relevant buffer pages
-    std::multimap<FileID, Page *> buffer_map_fd_;
+    FilePageMap buffer_map_fd_;
 
     // from (fd, page_id) pair to the buffer page
     std::map<std::pair<FileID, PageID>, Page *> buffer_map_;

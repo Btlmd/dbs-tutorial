@@ -52,7 +52,9 @@ public:
 
     std::shared_ptr<Result> DropPrimaryKey(const std::string &table_name);
 
-    std::shared_ptr<Result> AddIndex(const std::string &table_name, const std::string &field_name);
+    std::shared_ptr<Result> AddIndex(const std::string &table_name, const std::vector<std::string> &field_name);
+
+    std::shared_ptr<Result> DropIndex(const std::string &table_name, const std::vector<std::string> &field_name);
 
     /**
      * Delete records satisfying `cond`

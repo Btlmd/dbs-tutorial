@@ -81,6 +81,8 @@ public:
 
     antlrcpp::Any visitAlter_drop_index(SQLParser::Alter_drop_indexContext *ctx) override;
 
+    antlrcpp::Any visitShow_tables(SQLParser::Show_tablesContext *ctx) override;
+
 };
 
 
