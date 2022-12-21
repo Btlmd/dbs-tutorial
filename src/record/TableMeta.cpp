@@ -45,6 +45,8 @@ std::shared_ptr<TableMeta> TableMeta::FromSrc(FileID fd, BufferSystem &buffer) {
     read_var(src, field_count);
     FieldID fk_count;
     read_var(src, fk_count);
+    FieldID uk_count;
+    read_var(src, fk_count);
     FieldID index_count;
     read_var(src, index_count);
     bool has_pk;
@@ -65,6 +67,16 @@ std::shared_ptr<TableMeta> TableMeta::FromSrc(FileID fd, BufferSystem &buffer) {
         ForeignKey fk;
         read_var(src, fk);
         ret->foreign_keys.push_back(std::make_shared<ForeignKey>(fk));
+    }
+
+    // Unique Keys
+    for (FieldID i{0}; i < uk_count; ++i) {
+        if (i % UK_PER_PAGE == 0) {
+            NextPage();
+        }
+        UniqueKey fk;
+        read_var(src, fk);
+        ret->unique_keys.push_back(std::make_shared<UniqueKey>(fk));
     }
 
     // Index Keys
@@ -111,6 +123,7 @@ void TableMeta::Write() {
     write_string(dst, table_name);
     write_var(dst, static_cast<FieldID>(field_meta.Count()));
     write_var(dst, static_cast<FieldID>(foreign_keys.size()));
+    write_var(dst, static_cast<FieldID>(unique_keys.size()));
     write_var(dst, static_cast<FieldID>(index_keys.size()));
     write_var(dst, bool(primary_key != nullptr));
     if (primary_key != nullptr) {

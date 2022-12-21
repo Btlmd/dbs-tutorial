@@ -21,6 +21,7 @@
 #include <record/DataPage.h>
 #include <node/OpNode.h>
 #include <system/WhereConditions.h>
+#include <index/IndexFile.h>
 
 class DBSystem {
 public:
@@ -54,12 +55,14 @@ public:
     std::shared_ptr<Result> DropPrimaryKey(const std::string &table_name);
 
     std::shared_ptr<Result> AddIndex(const std::string &table_name, const std::vector<std::string> &field_name);
-    std::shared_ptr<Result> AddIndex(TableID table_id, const std::vector<FieldID>& field_ids, bool is_user);
+
+    std::shared_ptr<Result> AddIndex(TableID table_id, const std::vector<FieldID> &field_ids, bool is_user);
 
     std::shared_ptr<Result> DropIndex(const std::string &table_name, const std::vector<std::string> &field_name);
-    std::shared_ptr<Result> DropIndex(TableID table_id, const std::vector<FieldID>& field_ids, bool is_user);
 
-    static std::string GetIndexFilePath(TableID table_id, const std::vector<FieldID>& field_ids) {
+    std::shared_ptr<Result> DropIndex(TableID table_id, const std::vector<FieldID> &field_ids, bool is_user);
+
+    static std::string GetIndexFilePath(TableID table_id, const std::vector<FieldID> &field_ids) {
         auto field_string = std::to_string(field_ids[0]);
         for (auto i = 1; i < field_ids.size(); ++i) {
             field_string += "_" + std::to_string(field_ids[i]);
@@ -105,10 +108,11 @@ public:
 
     /**
      * Validate that the record satisfies all constraints specified by `meta`
+     * Caller ensures that the field type are legal
      * @param meta
      * @param record
      */
-    void CheckConstraint(const TableMeta &meta, const std::shared_ptr<Record> &record) const;
+    void CheckConstraint(const TableMeta &meta, const std::shared_ptr<Record> &record);
 
     /**
      * Get a const pointer to TableMeta of the specific table
@@ -150,6 +154,7 @@ private:
     std::unordered_map<TableID, FileID> table_data_fd;
     std::unordered_map<TableID, FileID> table_meta_fd;
     std::map<std::pair<TableID, std::vector<FieldID>>, FileID> table_index_fd;
+    std::map<std::pair<TableID, std::vector<FieldID>>, std::shared_ptr<IndexFile>> table_index_file;
     std::unordered_map<TableID, std::shared_ptr<TableMeta>> meta_map;
     boost::bimap<std::string, TableID> table_name_map;
     bool on_use{false};
@@ -213,6 +218,71 @@ private:
     void CheckOnUse() const;
 
     void InsertRecord(TableID table_id, const std::shared_ptr<Record> &record);
+
+    /**
+     * Get IndexFile for single field index
+     * @param table_id
+     * @param field_id
+     * @param value
+     */
+    std::shared_ptr<IndexFile> GetIndexFile(TableID table_id, FieldID field_id) {
+        std::vector<FieldID> fields{field_id};
+        auto ident{std::make_pair(table_id, fields)};
+        auto it_if{table_index_file.find(ident)};
+        if (it_if != table_index_file.end()) {
+            return it_if->second;
+        }
+
+        auto it{table_index_fd.find(std::make_pair(table_id, fields))};
+        if (it == table_index_fd.end()) {
+            throw OperationError{"Internal Error! No index on ({}, {})", table_id, field_id};
+        }
+        auto ret{std::make_shared<IndexFile>(buffer, it->second)};
+        table_index_file[ident] = ret;
+        return ret;
+    }
+
+    /**
+     * Get IndexFile for 2-fields composite index
+     * @param table_id
+     * @param field_id1
+     * @param field_id2
+     * @return
+     */
+    std::shared_ptr<IndexFile> GetIndexFile(TableID table_id, FieldID field_id1, FieldID field_id2) {
+        std::vector<FieldID> fields{{field_id1, field_id2}};
+        auto ident{std::make_pair(table_id, fields)};
+        auto it_if{table_index_file.find(ident)};
+        if (it_if != table_index_file.end()) {
+            return it_if->second;
+        }
+
+        auto it{table_index_fd.find(std::make_pair(table_id, fields))};
+        if (it == table_index_fd.end()) {
+            throw OperationError{"Internal Error! No index on ({}, [{}, {}])", table_id, field_id1, field_id2};
+        }
+        auto ret{std::make_shared<IndexFile>(buffer, it->second)};
+        table_index_file[ident] = ret;
+        return ret;
+    }
+
+    /**
+     * Drop all indexes of `record`
+     * @param table_id
+     * @param page_id
+     * @param j
+     * @param record
+     */
+    void DropRecordIndex(TableID table_id, PageID page_id, SlotID j, const std::shared_ptr<Record> record);
+
+    void InsertRecordIndex(TableID table_id, PageID page_id, SlotID j, const std::shared_ptr<Record> record);
+
+    void UpdateInPlaceRecordIndex(
+            const std::unordered_set<FieldID> &affected,
+            TableID table_id, PageID page_id, SlotID j,
+            const std::shared_ptr<Record> &record_prev,
+            const std::shared_ptr<Record> &record_updated
+    );
 
 };
 

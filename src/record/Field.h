@@ -30,6 +30,7 @@ public:
     char name[CONSTRAINT_NAME_LEN_MAX + 1];
     FieldID field_count;
     FieldID fields[MAX_FIELD_COUNT];
+
 };
 
 class ForeignKey {
@@ -39,6 +40,13 @@ public:
     FieldID fields[MAX_FIELD_COUNT];
     TableID reference_table;
     FieldID reference_fields[MAX_FIELD_COUNT];
+};
+
+class UniqueKey {
+public:
+    char name[CONSTRAINT_NAME_LEN_MAX + 1];
+    FieldID field_count;
+    FieldID fields[MAX_FIELD_COUNT];
 };
 
 class IndexKey {
@@ -381,7 +389,6 @@ public:
             std::string name,
             FieldID field_id,
             RecordSize max_size = -1,
-            bool unique = false,
             bool not_null = false,
             bool has_default = false,
             std::shared_ptr<Field> default_value = nullptr
@@ -389,7 +396,6 @@ public:
         name{std::move(name)},
         field_id{field_id},
         max_size{max_size},
-        unique{unique},
         not_null{not_null},
         has_default{has_default},
         default_value{default_value} {}
@@ -399,7 +405,6 @@ public:
     FieldID field_id;
 
     RecordSize max_size{-1};
-    bool unique{false};
     bool not_null{false};
     bool has_default{false};
     std::shared_ptr<Field> default_value{nullptr};
@@ -411,7 +416,6 @@ public:
         read_string(src, meta->name);
         read_var(src, meta->max_size);
         read_var(src, meta->field_id);
-        read_var(src, meta->unique);
         read_var(src, meta->not_null);
         read_var(src, meta->has_default);
         if (meta->has_default) {
@@ -427,7 +431,6 @@ public:
         write_string(dst, name);
         write_var(dst, max_size);
         write_var(dst, field_id);
-        write_var(dst, unique);
         write_var(dst, not_null);
         write_var(dst, has_default);
         if (has_default) {
@@ -437,7 +440,7 @@ public:
     }
 
     [[nodiscard]] RecordSize Size() const {
-        auto _size{sizeof(type) + sizeof(max_size) + sizeof(field_id) + sizeof(unique) + sizeof(not_null) + sizeof(has_default)};
+        auto _size{sizeof(type) + sizeof(max_size) + sizeof(field_id) + sizeof(not_null) + sizeof(has_default)};
         _size += name.size() + sizeof(RecordSize);
         if (has_default) {
             assert(default_value != nullptr);

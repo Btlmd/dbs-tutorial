@@ -75,6 +75,7 @@ public:
     FieldMetaTable field_meta;
     std::shared_ptr<PrimaryKey> primary_key{nullptr};
     std::vector<std::shared_ptr<ForeignKey>> foreign_keys;
+    std::vector<std::shared_ptr<UniqueKey>> unique_keys;
     std::vector<std::shared_ptr<IndexKey>> index_keys;  // （table id + fields）
 
     /**
@@ -106,6 +107,7 @@ private:
 
 constexpr int FK_PER_PAGE{PAGE_SIZE / sizeof(ForeignKey)};
 constexpr int IK_PER_PAGE{PAGE_SIZE / sizeof(IndexKey)};
+constexpr int UK_PER_PAGE{PAGE_SIZE / sizeof(UniqueKey)};
 constexpr int FIELD_PER_PAGE{1};
 
 #endif //DBS_TUTORIAL_TABLEMETA_H

@@ -51,6 +51,8 @@ void BufferSystem::Access(Page *page) {
     assert(visit_record_map_.find(page) != visit_record_map_.end());
     auto it{visit_record_map_[page]};
     if (it != visit_record_.begin()) {
+        auto head{visit_record_.begin()};
+        std::advance(head, Page::lock_count);
         visit_record_.splice(visit_record_.begin(), visit_record_, it);
     }
 

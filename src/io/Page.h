@@ -31,6 +31,27 @@ public:
     }
 
     /**
+     * Make sure a page will not be swapped
+     * Note: since we lock it in list head, you must make sure that you lock the page immediately after `Access` it
+     */
+    void Lock() {
+        if (!lock) {
+            ++lock_count;
+        }
+        lock = true;
+    }
+
+    /**
+     * Allow a page to be swapped
+     */
+    void Release() {
+        if (lock) {
+            --lock_count;
+        }
+        lock = false;
+    }
+
+    /**
      * return a formatted representation of the page
      * for debug
      * @return
@@ -43,9 +64,11 @@ public:
 
     uint8_t data[PAGE_SIZE];
     bool dirty{false};
+    bool lock{false};
     FileID fd;
     PageID id;
     PageID seq_id;
+    static std::size_t lock_count;
 };
 
 

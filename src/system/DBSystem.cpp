@@ -96,13 +96,13 @@ std::shared_ptr<Result> DBSystem::UseDatabase(const std::string &db_name) {
         meta_map[table_id] = TableMeta::FromSrc(table_meta_fd[table_id], buffer);
 
         // Insert into table_index_fd
-        for (auto& index : meta_map[table_id]->index_keys) {
+        for (auto &index: meta_map[table_id]->index_keys) {
             std::vector<FieldID> field_ids;
             for (int ii = 0; ii < index->field_count; ++ii) {
                 field_ids.push_back(index->fields[ii]);
             }
-            table_index_fd[std::make_pair((TableID)table_id, field_ids)] =
-                FileSystem::OpenFile(DB_DIR / db_name / GetIndexFilePath(table_id, field_ids));
+            table_index_fd[std::make_pair((TableID) table_id, field_ids)] =
+                    FileSystem::OpenFile(DB_DIR / db_name / GetIndexFilePath(table_id, field_ids));
         }
     }
 
@@ -132,6 +132,9 @@ void DBSystem::CloseDatabase() {
 
     Trace("Closing database " << current_database);
 
+    // Release IndexFile
+    table_index_file.clear();
+
     // Update table_info
     auto table_info_page = buffer.ReadPage(table_info_fd, 0);
     uint8_t *table_info_ptr{table_info_page->data};
@@ -154,7 +157,8 @@ void DBSystem::CloseDatabase() {
         buffer.CloseFile(relation.second);
     };
 
-    auto close_func_index  = [this](const std::pair<std::pair<TableID, std::vector<FieldID>>, FileID> &relation) -> void {
+    auto close_func_index = [this](
+            const std::pair<std::pair<TableID, std::vector<FieldID>>, FileID> &relation) -> void {
         buffer.CloseFile(relation.second);
     };
 
@@ -382,7 +386,10 @@ std::shared_ptr<DataPage> DBSystem::FindPageWithSpace(TableID table_id, RecordSi
     return data_page;
 }
 
-void DBSystem::CheckConstraint(const TableMeta &meta, const std::shared_ptr<Record> &record) const {
+void DBSystem::CheckConstraint(const TableMeta &meta, const std::shared_ptr<Record> &record) {
+    auto field_count{meta.field_meta.Count()};
+    auto table_id{meta.table_id};
+
     // check not null
     for (int i{0}; i < meta.field_meta.Count(); ++i) {
         if (record->fields[i]->is_null && meta.field_meta.meta[i]->not_null) {
@@ -390,21 +397,51 @@ void DBSystem::CheckConstraint(const TableMeta &meta, const std::shared_ptr<Reco
         }
     }
 
-    // TODO: check unique
-
-    // TODO: check primary key implies not null and unique
-    if (meta.primary_key != nullptr) {
-        for (int i{0}; i < meta.primary_key->field_count; ++i) {
-
-        }
-    }
-
-    // TODO: check foreign key
-    for (const auto &fk: meta.foreign_keys) {
-        for (int i{0}; i < fk->field_count; ++i) {
-
-        }
-    }
+//    // check unique
+//    for (const auto &uk: meta.unique_keys) {
+//        if (uk->field_count == 0 && meta.field_meta.meta[0]->type == FieldType::INT) { // use index
+//            if (GetIndexFile(table_id, uk->fields[0])
+//                    ->Contains(IndexINT::FromDataField({record->fields[uk->fields[0]]}))
+//                    ) {
+//                auto repr{record->fields[uk->fields[0]]->ToString()};
+//                throw OperationError{"Unique Constraint `{}` Failed: {} already exists", uk->name, repr};
+//            }
+//        } else { // use trivial scan
+//            auto scan{GetTrivialScanNode(meta.table_id, nullptr)};
+//            while (!scan->Over()) {
+//                auto records{scan->Next()};
+//                for (const auto &r: records) {
+//                    for (FieldID i{0}; i < uk->field_count; ++i) {
+//
+//                    }
+//                }
+//            }
+//        }
+//
+//        for (int i{0}; i < uk->field_count; ++i) {
+//            auto field_id{uk->fields[i]};
+//            if (meta.field_meta.meta[field_id]->type == FieldType::INT) {
+//
+//            } else {
+//
+//            }
+//        }
+//    }
+//
+//    // TODO: check primary key implies not null and unique
+//    if (meta.primary_key != nullptr) {
+//        for (int i{0}; i < meta.primary_key->field_count; ++i) {
+//            auto field_id{meta.primary_key->fields[i]};
+//
+//        }
+//    }
+//
+//    // TODO: check foreign key
+//    for (const auto &fk: meta.foreign_keys) {
+//        for (int i{0}; i < fk->field_count; ++i) {
+//
+//        }
+//    }
 }
 
 std::shared_ptr<Result> DBSystem::DescribeTable(const std::string &table_name) {
@@ -442,16 +479,16 @@ std::shared_ptr<Result> DBSystem::DescribeTable(const std::string &table_name) {
         result->AddInfo(fmt::format("PRIMARY KEY ({})", pk_fields));
     }
 
-    // unique constraints
-    std::vector<std::string> unique_field_names;
-    for (const auto &fm: table_meta->field_meta.meta) {
-        if (fm->unique) {
-            unique_field_names.push_back(fmt::format("UNIQUE ({});", fm->name));
-        }
-    }
-    std::sort(unique_field_names.begin(), unique_field_names.end());
-    std::for_each(unique_field_names.begin(), unique_field_names.end(),
-                  [&result](const auto &_info) { return result->AddInfo(_info); });
+    // TODO: unique constraints
+//    std::vector<std::string> unique_field_names;
+//    for (const auto &fm: table_meta->field_meta.meta) {
+//        if (fm->unique) {
+//            unique_field_names.push_back(fmt::format("UNIQUE ({});", fm->name));
+//        }
+//    }
+//    std::sort(unique_field_names.begin(), unique_field_names.end());
+//    std::for_each(unique_field_names.begin(), unique_field_names.end(),
+//                  [&result](const auto &_info) { return result->AddInfo(_info); });
 
     // foreign key constraints
     for (const auto &fk: table_meta->foreign_keys) {
@@ -522,17 +559,22 @@ std::shared_ptr<Result> DBSystem::Delete(TableID table_id, const std::shared_ptr
     std::size_t delete_counter{0};
     for (PageID i{0}; i < meta_map[table_id]->data_page_count; ++i) {
         auto page = buffer.ReadPage(data_fd, i);
+        page->Lock();
         DataPage dp{page, *meta_map[table_id]};
         RecordList ret;
         for (FieldID j{0}; j < dp.header.slot_count; ++j) {
             auto record{dp.Select(j)};
             if (record != nullptr && (*cond)(record)) {
                 ++delete_counter;
+
+                // delete entries in index
+                DropRecordIndex(table_id, page->id, j, record);
+
                 // perform delete
                 dp.Delete(j);
-                // TODO: delete entries in index
             }
         }
+        page->Release();
     }
     return std::make_shared<TextResult>(fmt::format("{} record(s) deleted", delete_counter));
 }
@@ -547,34 +589,47 @@ std::shared_ptr<Result>
 DBSystem::Update(TableID table_id, const std::vector<std::pair<std::shared_ptr<FieldMeta>,
         std::shared_ptr<Field>>> &updates, const std::shared_ptr<FilterCondition> &cond) {
     auto data_fd{table_data_fd[table_id]};
+    auto meta{meta_map[table_id]};
     std::size_t update_counter{0};
+    std::unordered_set<FieldID> affected;
+    for (const auto &[fm, val]: updates) {
+        affected.insert(fm->field_id);
+    }
     for (PageID i{0}; i < meta_map[table_id]->data_page_count; ++i) {
         auto page = buffer.ReadPage(data_fd, i);
-        DataPage dp{page, *meta_map[table_id]};
+        page->Lock();
+        DataPage dp{page, *meta};
         RecordList ret;
         for (FieldID j{0}; j < dp.header.slot_count; ++j) {
             auto record{dp.Select(j)};
             if (record != nullptr && (*cond)(record)) {
+                auto updated_record{record->Copy()};
+                updated_record->Update(updates);
+
+                // check for constraints
+                CheckConstraint(*meta, updated_record);
+
                 ++update_counter;
                 auto original_size{record->Size()};
-                record->Update(updates);
-                if (record->Size() > original_size) {
+                if (updated_record->Size() > original_size) {
+                    DropRecordIndex(table_id, page->id, j, record);
                     dp.Delete(j);
-                    InsertRecord(table_id, record);
+                    InsertRecord(table_id, updated_record); // index inserted through this function
                 } else {  // in-place update
-                    dp.Update(j, record);
+                    dp.Update(j, updated_record);
+                    UpdateInPlaceRecordIndex(affected, table_id, page->id, j, record, updated_record);
                 }
-                // TODO: update entries in index
             }
         }
+        page->Release();
     }
     return std::make_shared<TextResult>(fmt::format("{} record(s) updated", update_counter));
 }
 
 void DBSystem::InsertRecord(TableID table_id, const std::shared_ptr<Record> &record) {
-    // TODO: update index
-    auto page_to_insert{FindPageWithSpace(table_id, record->Size())};
-    page_to_insert->Insert(record);
+    auto page{FindPageWithSpace(table_id, record->Size())};
+    auto slot_id{page->Insert(record)};
+    InsertRecordIndex(table_id, page->page->id, slot_id, record);
 }
 
 
@@ -595,7 +650,7 @@ std::shared_ptr<Result> DBSystem::AddIndex(const std::string &table_name, const 
     return AddIndex(table_id, field_id, true);
 }
 
-std::shared_ptr<Result> DBSystem::AddIndex(TableID table_id, const std::vector<FieldID>& field_ids, bool is_user) {
+std::shared_ptr<Result> DBSystem::AddIndex(TableID table_id, const std::vector<FieldID> &field_ids, bool is_user) {
     // First, search in index_keys to see if the index already exists
     auto table_meta{meta_map[table_id]};
 
@@ -610,9 +665,10 @@ std::shared_ptr<Result> DBSystem::AddIndex(TableID table_id, const std::vector<F
     for (const auto &field_id: field_ids) {
         new_index->fields[new_index->field_count++] = field_id;
     }
-    auto find_result = std::find_if(table_meta->index_keys.begin(), table_meta->index_keys.end(), [&](const auto &index) {
-        return *index == *new_index;
-    });
+    auto find_result = std::find_if(table_meta->index_keys.begin(), table_meta->index_keys.end(),
+                                    [&](const auto &index) {
+                                        return *index == *new_index;
+                                    });
 
     if (find_result == table_meta->index_keys.end()) {
 
@@ -639,7 +695,7 @@ std::shared_ptr<Result> DBSystem::AddIndex(TableID table_id, const std::vector<F
         while (!scan_node.Over()) {
             RecordList records = scan_node.Next();
             PageID page_id = scan_node.current_page;
-            const std::vector<SlotID>& slot_ids = scan_node.slot_ids;
+            const std::vector<SlotID> &slot_ids = scan_node.slot_ids;
 
             for (int i = 0; i < records.size(); i++) {
                 std::shared_ptr<Record> record = records[i];
@@ -693,7 +749,7 @@ std::shared_ptr<Result> DBSystem::DropIndex(const std::string &table_name, const
     return DropIndex(table_id, field_id, true);
 }
 
-std::shared_ptr<Result> DBSystem::DropIndex(TableID table_id, const std::vector<FieldID>& field_ids, bool is_user) {
+std::shared_ptr<Result> DBSystem::DropIndex(TableID table_id, const std::vector<FieldID> &field_ids, bool is_user) {
     auto table_meta{meta_map[table_id]};
 
     auto new_index = std::make_shared<IndexKey>();
@@ -707,9 +763,10 @@ std::shared_ptr<Result> DBSystem::DropIndex(TableID table_id, const std::vector<
     for (const auto &field_id: field_ids) {
         new_index->fields[new_index->field_count++] = field_id;
     }
-    auto find_result = std::find_if(table_meta->index_keys.begin(), table_meta->index_keys.end(), [&](const auto &index) {
-        return *index == *new_index;
-    });
+    auto find_result = std::find_if(table_meta->index_keys.begin(), table_meta->index_keys.end(),
+                                    [&](const auto &index) {
+                                        return *index == *new_index;
+                                    });
 
     if (find_result == table_meta->index_keys.end()) {
         throw OperationError("Index does not exist");
@@ -738,6 +795,67 @@ std::shared_ptr<Result> DBSystem::DropIndex(TableID table_id, const std::vector<
         FileSystem::RemoveFile(DB_DIR / current_database / GetIndexFilePath(table_id, field_ids));
     }
 
-
     return std::shared_ptr<Result>{new TextResult{"Query OK"}};
+}
+
+void DBSystem::DropRecordIndex(TableID table_id, PageID page_id, SlotID j, const std::shared_ptr<Record> record) {
+    for (const auto &ik: meta_map[table_id]->index_keys) {
+        if (ik->field_count == 1) {
+            auto index_field{IndexINT::FromDataField({record->fields[ik->fields[0]]})};
+            GetIndexFile(table_id, ik->fields[0])->DeleteRecord(page_id, j, index_field);
+            continue;
+        }
+        if (ik->field_count == 2) {
+            auto index_field{IndexINT::FromDataField({record->fields[ik->fields[0]], record->fields[ik->fields[1]]})};
+            GetIndexFile(table_id, ik->fields[0], ik->fields[1])->DeleteRecord(page_id, j, index_field);
+            continue;
+        }
+    }
+}
+
+void DBSystem::InsertRecordIndex(TableID table_id, PageID page_id, SlotID j, const std::shared_ptr<Record> record) {
+    for (const auto &ik: meta_map[table_id]->index_keys) {
+        if (ik->field_count == 1) {
+            auto index_field{IndexINT::FromDataField({record->fields[ik->fields[0]]})};
+            GetIndexFile(table_id, ik->fields[0])->InsertRecord(page_id, j, index_field);
+            continue;
+        }
+        if (ik->field_count == 2) {
+            auto index_field{IndexINT::FromDataField({record->fields[ik->fields[0]], record->fields[ik->fields[1]]})};
+            GetIndexFile(table_id, ik->fields[0], ik->fields[1])->InsertRecord(page_id, j, index_field);
+            continue;
+        }
+    }
+}
+
+void
+DBSystem::UpdateInPlaceRecordIndex(const std::unordered_set<FieldID> &affected,
+                                   TableID table_id, PageID page_id, SlotID j,
+                                   const std::shared_ptr<Record> &record_prev,
+                                   const std::shared_ptr<Record> &record_updated) {
+    for (const auto &ik: meta_map[table_id]->index_keys) {
+        if (ik->field_count == 1) {
+            if (affected.find(ik->fields[0]) == affected.end()) {
+                continue;
+            }
+
+            auto index_field{IndexINT::FromDataField({record_prev->fields[ik->fields[0]]})};
+            GetIndexFile(table_id, ik->fields[0])->DeleteRecord(page_id, j, index_field);
+            index_field = IndexINT::FromDataField({record_updated->fields[ik->fields[0]]});
+            GetIndexFile(table_id, ik->fields[0])->InsertRecord(page_id, j, index_field);
+            continue;
+        }
+        if (ik->field_count == 2) {
+            if (affected.find(ik->fields[0]) == affected.end() && affected.find(ik->fields[1]) == affected.end()) {
+                continue;
+            }
+            auto index_field{
+                    IndexINT::FromDataField({record_prev->fields[ik->fields[0]], record_prev->fields[ik->fields[1]]})};
+            GetIndexFile(table_id, ik->fields[0], ik->fields[1])->DeleteRecord(page_id, j, index_field);
+            index_field = IndexINT::FromDataField(
+                    {record_updated->fields[ik->fields[0]], record_updated->fields[ik->fields[1]]});
+            GetIndexFile(table_id, ik->fields[0], ik->fields[1])->InsertRecord(page_id, j, index_field);
+            continue;
+        }
+    }
 }

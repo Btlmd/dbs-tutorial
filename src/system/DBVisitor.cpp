@@ -99,7 +99,6 @@ antlrcpp::Any DBVisitor::visitCreate_table(SQLParser::Create_tableContext *ctx) 
                     field_name,
                     field_id_counter++,
                     max_size,
-                    false,
                     not_null != nullptr,
                     false,
                     nullptr

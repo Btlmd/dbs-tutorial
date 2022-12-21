@@ -79,6 +79,10 @@ public:
         return std::move(buffer);
     }
 
+    [[nodiscard]] std::shared_ptr<Record> Copy() const {
+        return std::make_shared<Record>(fields);
+    }
+
     /**
      * Update specified fields of a record
      * @param updates
