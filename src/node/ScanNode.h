@@ -20,6 +20,9 @@ public:
                                         current_page{-1},
                                         data_fd{page_file}, meta{std::move(table_meta)} {}
 
+    PageID current_page;
+    std::vector<SlotID> slot_ids;
+
     void Reset() override {
         OpNode::Reset();
         current_page = -1;
@@ -31,7 +34,7 @@ public:
     }
 
     RecordList Next() override {
-        ++current_page;
+        ++current_page; slot_ids.clear();
         auto page = buffer.ReadPage(data_fd, current_page);
         DataPage dp{page, *meta};
         RecordList ret;
@@ -39,6 +42,7 @@ public:
             auto record{dp.Select(i)};
             if (record != nullptr && (condition == nullptr || (*condition)(record))) {
                 ret.push_back(record);
+                slot_ids.push_back(i);
             }
         }
         return std::move(ret);
@@ -50,7 +54,7 @@ private:
     BufferSystem &buffer;
     const std::shared_ptr<const TableMeta> meta;
     const std::shared_ptr<FilterCondition> condition;
-    PageID current_page;
+
     FileID data_fd;
 };
 

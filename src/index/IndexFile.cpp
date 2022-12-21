@@ -178,6 +178,8 @@ void IndexFile::InsertRecord(PageID page_id, SlotID slot_id, const std::shared_p
         curr_page_id = Page(curr_page_id)->ParentPage();
     }
 
+    Print();  // TODO
+
 }
 
 
@@ -446,4 +448,16 @@ std::pair<PageID, TreeOrder> IndexFile::Next(std::pair<PageID, TreeOrder> iter) 
     } else {
         return std::make_pair(Page(iter.first)->NextPage(), 0);
     }
+}
+
+std::pair<PageID, TreeOrder> IndexFile::SelectRecordExact(const std::shared_ptr<IndexField>& key) {
+    auto iter = SelectRecord(key);
+    // Check if the key is exact match
+    if (iter.first > 0 && iter.second >= 0 && iter.second < Page(iter.first)->ChildCount()) {
+        auto record = Page(iter.first)->Select(iter.second);
+        if (*(record->key) == *key) {
+            return iter;
+        }
+    }
+    return std::make_pair(-1, -1);
 }

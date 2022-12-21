@@ -20,10 +20,15 @@ class IndexFile {
     std::shared_ptr<IndexMeta> meta;
     std::vector<FieldID> field_ids;
 
+    // Constructor for new index file
     explicit IndexFile(TableID _table_id, std::shared_ptr<IndexMeta> _meta, std::vector<FieldID> _field_ids,
                        BufferSystem& buffer, FileID fd) :
-                table_id(_table_id), meta(std::move(_meta)), field_ids(std::move(_field_ids)), buffer(buffer), fd(fd) {}
+                table_id(_table_id), meta(std::move(_meta)), field_ids(std::move(_field_ids)), buffer(buffer), fd(fd) {
+        class Page* page = buffer.CreatePage(fd, 0);
+        Write();
+    }
 
+    // Constructor for loading existing index file (Read fd from DBSystem.table_index_fd)
     explicit IndexFile(BufferSystem& buffer, FileID fd) : buffer{buffer}, fd{fd} {
         // Read Page 0
         class Page* page = buffer.ReadPage(fd, 0);
@@ -41,8 +46,11 @@ class IndexFile {
     }
 
     ~IndexFile() {
-        // Write back Page 0
-        class Page* page = buffer.CreatePage(fd, 0);
+        Write();
+    }
+
+    void Write() {
+        class Page* page = buffer.ReadPage(fd, 0);
         uint8_t *dst = page->data;
         write_var(dst, table_id);
         meta->Write(dst);
@@ -58,6 +66,7 @@ class IndexFile {
     std::pair<PageID, TreeOrder> Next(std::pair<PageID, TreeOrder> iter);
     std::shared_ptr<IndexRecordLeaf> Select(std::pair<PageID, TreeOrder> iter);
     std::pair<PageID, TreeOrder> SelectRecord(const std::shared_ptr<IndexField>& key);
+    std::pair<PageID, TreeOrder> SelectRecordExact(const std::shared_ptr<IndexField>& key);  // Return {-1, -1} if no exact match
     void InsertRecord(PageID page_id, SlotID slot_id, const std::shared_ptr<IndexField>& key);
     int DeleteRecord(PageID page_id, SlotID slot_id, const std::shared_ptr<IndexField>& key);
     int DeleteRecordRange(const std::shared_ptr<IndexField>& key1, const std::shared_ptr<IndexField>& key2);  // Delete [key1, key2]
@@ -72,14 +81,6 @@ class IndexFile {
     // In case of borrowing, return the current page
     // In case of merging, return the next page
     PageID SolveDelete(PageID delete_page_id);
-
-//
-//    void DeleteRecordRange(IndexField* key) { return DeleteRecordRange(key, key); }
-//    void UpdateRecord(PageID page_id_old, SlotID slot_id_old, IndexField* key_old,
-//                      PageID page_id, SlotID slot_id, IndexField* key) {
-//        DeleteRecord(page_id_old, slot_id_old, key_old);
-//        InsertRecord(page_id, slot_id, key);
-//    }
 
 
     /* Interfaces for index management */

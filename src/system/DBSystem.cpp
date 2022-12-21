@@ -94,6 +94,16 @@ std::shared_ptr<Result> DBSystem::UseDatabase(const std::string &db_name) {
         table_data_fd[table_id] = FileSystem::OpenFile(DB_DIR / db_name / fmt::format(TABLE_DATA_PATTERN, table_id));
         table_meta_fd[table_id] = FileSystem::OpenFile(DB_DIR / db_name / fmt::format(TABLE_META_PATTERN, table_id));
         meta_map[table_id] = TableMeta::FromSrc(table_meta_fd[table_id], buffer);
+
+        // Insert into table_index_fd
+        for (auto& index : meta_map[table_id]->index_keys) {
+            std::vector<FieldID> field_ids;
+            for (int ii = 0; ii < index->field_count; ++ii) {
+                field_ids.push_back(index->fields[ii]);
+            }
+            table_index_fd[std::make_pair((TableID)table_id, field_ids)] =
+                FileSystem::OpenFile(DB_DIR / db_name / GetIndexFilePath(table_id, field_ids));
+        }
     }
 
     current_database = db_name;
@@ -143,13 +153,20 @@ void DBSystem::CloseDatabase() {
     auto close_func = [this](const std::pair<TableID, FileID> &relation) -> void {
         buffer.CloseFile(relation.second);
     };
+
+    auto close_func_index  = [this](const std::pair<std::pair<TableID, std::vector<FieldID>>, FileID> &relation) -> void {
+        buffer.CloseFile(relation.second);
+    };
+
     std::for_each(table_meta_fd.begin(), table_meta_fd.end(), close_func);
     std::for_each(table_data_fd.begin(), table_data_fd.end(), close_func);
+    std::for_each(table_index_fd.begin(), table_index_fd.end(), close_func_index);
 
     // reset table status
     table_name_map.clear();
     table_data_fd.clear();
     table_meta_fd.clear();
+    table_index_fd.clear();
     meta_map.clear();
 
     current_database = "";
@@ -233,6 +250,9 @@ std::shared_ptr<Result> DBSystem::DropTable(const std::string &table_name) {
     buffer.CloseFile(table_data_fd[table_id]);
     FileSystem::RemoveFile(DB_DIR / current_database / fmt::format(TABLE_DATA_PATTERN, table_id));
     FileSystem::RemoveFile(DB_DIR / current_database / fmt::format(TABLE_META_PATTERN, table_id));
+
+    // TODO: drop index
+
     table_data_fd.erase(table_id);
     table_meta_fd.erase(table_id);
     meta_map.erase(table_id);
@@ -462,6 +482,20 @@ std::shared_ptr<Result> DBSystem::DescribeTable(const std::string &table_name) {
                 fk_reference_fields
         ));
     }
+
+    for (const auto &index: table_meta->index_keys) {
+        std::string index_fields;
+        for (int i{0}; i < index->field_count; ++i) {
+            index_fields += table_meta->field_meta.meta[index->fields[i]]->name;
+            if (i != index->field_count - 1) {
+                index_fields += ", ";
+            }
+        }
+        if (index->user_created) {
+            result->AddInfo(fmt::format("INDEX ({})", index_fields));
+        }
+    }
+
     return result;
 }
 
@@ -538,25 +572,172 @@ DBSystem::Update(TableID table_id, const std::vector<std::pair<std::shared_ptr<F
 }
 
 void DBSystem::InsertRecord(TableID table_id, const std::shared_ptr<Record> &record) {
+    // TODO: update index
     auto page_to_insert{FindPageWithSpace(table_id, record->Size())};
     page_to_insert->Insert(record);
 }
 
 
 std::shared_ptr<Result> DBSystem::AddIndex(const std::string &table_name, const std::vector<std::string> &field_name) {
-    // TODO
-    return std::shared_ptr<Result>();
+    auto table_id = GetTableID(table_name);
+    auto table_meta{meta_map[table_id]};
+
+    // Get FieldID
+    std::vector<FieldID> field_id;
+    for (const auto &field: field_name) {
+        auto id = table_meta->field_meta.ToID(field);
+        if (id == -1) {
+            throw OperationError("Field {} not found", field);
+        }
+        field_id.push_back(id);
+    }
+
+    return AddIndex(table_id, field_id, true);
+}
+
+std::shared_ptr<Result> DBSystem::AddIndex(TableID table_id, const std::vector<FieldID>& field_ids, bool is_user) {
+    // First, search in index_keys to see if the index already exists
+    auto table_meta{meta_map[table_id]};
+
+    auto new_index = std::make_shared<IndexKey>();
+    new_index->field_count = 0;
+    new_index->user_created = false;
+    new_index->reference_count = 0;  // 1 if system-created, 0 if user-created
+    if (!is_user) {
+        new_index->reference_count = 1;
+    }
+
+    for (const auto &field_id: field_ids) {
+        new_index->fields[new_index->field_count++] = field_id;
+    }
+    auto find_result = std::find_if(table_meta->index_keys.begin(), table_meta->index_keys.end(), [&](const auto &index) {
+        return *index == *new_index;
+    });
+
+    if (find_result == table_meta->index_keys.end()) {
+
+        table_meta->index_keys.push_back(new_index);
+
+        // Create index file
+        FileSystem::NewFile(DB_DIR / current_database / GetIndexFilePath(table_id, field_ids));
+        FileID fd = FileSystem::OpenFile(DB_DIR / current_database / GetIndexFilePath(table_id, field_ids));
+
+        IndexFieldType type = IndexFieldType::INVALID;
+        if (field_ids.size() == 1 && table_meta->field_meta.meta[field_ids[0]]->type == FieldType::INT) {
+            type = IndexFieldType::INT;
+        } else if (field_ids.size() == 2 && table_meta->field_meta.meta[field_ids[0]]->type == FieldType::INT
+                   && table_meta->field_meta.meta[field_ids[1]]->type == FieldType::INT) {
+            type = IndexFieldType::INT2;
+        } else {
+            throw OperationError("Unsupported index field type.");
+        }
+        auto meta = std::make_shared<IndexMeta>(type);
+        auto new_index_file = std::make_shared<IndexFile>(table_id, meta, field_ids, buffer, fd);
+        table_index_fd[std::make_pair(table_id, field_ids)] = fd;
+
+        TrivialScanNode scan_node{buffer, meta_map[table_id], nullptr, table_data_fd[table_id]};
+        while (!scan_node.Over()) {
+            RecordList records = scan_node.Next();
+            PageID page_id = scan_node.current_page;
+            const std::vector<SlotID>& slot_ids = scan_node.slot_ids;
+
+            for (int i = 0; i < records.size(); i++) {
+                std::shared_ptr<Record> record = records[i];
+
+                // Gather fields
+                std::vector<std::shared_ptr<Field>> fields;
+                for (const auto &field_id: field_ids) {
+                    fields.push_back(record->fields[field_id]);
+                }
+
+                new_index_file->InsertRecord(page_id, slot_ids[i], IndexField::FromDataField(type, fields));
+            }
+        }
+
+    }
+
+    auto index = *std::find_if(table_meta->index_keys.begin(), table_meta->index_keys.end(), [&](const auto &index) {
+        return *index == *new_index;
+    });
+
+
+    if (is_user) {
+        if (index->user_created) {
+            throw OperationError("Index already created by user");
+        } else {
+            index->user_created = true;
+            return std::make_shared<TextResult>("Query OK");
+        }
+    } else {
+        ++index->reference_count;
+        return std::make_shared<TextResult>("Query OK");
+    }
+
 }
 
 
 std::shared_ptr<Result> DBSystem::DropIndex(const std::string &table_name, const std::vector<std::string> &field_name) {
-    // TODO
-    return std::shared_ptr<Result>();
+    auto table_id = GetTableID(table_name);
+    auto table_meta{meta_map[table_id]};
+
+    // Get FieldID
+    std::vector<FieldID> field_id;
+    for (const auto &field: field_name) {
+        auto id = table_meta->field_meta.ToID(field);
+        if (id == -1) {
+            throw OperationError("Field {} not found", field);
+        }
+        field_id.push_back(id);
+    }
+
+    return DropIndex(table_id, field_id, true);
 }
 
-//void DropAllDatabases() {
-//    for(const auto &db_name: databases) {
-//        DropDatabase(db_name);
-//    }
-//    assert(databases.size() == 0);
-//}
+std::shared_ptr<Result> DBSystem::DropIndex(TableID table_id, const std::vector<FieldID>& field_ids, bool is_user) {
+    auto table_meta{meta_map[table_id]};
+
+    auto new_index = std::make_shared<IndexKey>();
+    new_index->field_count = 0;
+    new_index->user_created = is_user;
+    new_index->reference_count = 0;  // 1 if system-created, 0 if user-created
+    if (!is_user) {
+        new_index->reference_count = 1;
+    }
+
+    for (const auto &field_id: field_ids) {
+        new_index->fields[new_index->field_count++] = field_id;
+    }
+    auto find_result = std::find_if(table_meta->index_keys.begin(), table_meta->index_keys.end(), [&](const auto &index) {
+        return *index == *new_index;
+    });
+
+    if (find_result == table_meta->index_keys.end()) {
+        throw OperationError("Index does not exist");
+    }
+
+    auto index = *find_result;
+
+    if (is_user) {
+        if (index->user_created) {
+            index->user_created = false;
+        } else {
+            throw OperationError("Index does not created by user");
+        }
+    } else {
+        if (index->reference_count == 0) {
+            throw OperationError("Index does not exist");
+        } else {
+            --index->reference_count;
+        }
+    }
+
+    // Finish up
+    if (index->reference_count == 0 && !index->user_created) {
+        table_meta->index_keys.erase(find_result);
+        table_index_fd.erase(std::make_pair(table_id, field_ids));
+        FileSystem::RemoveFile(DB_DIR / current_database / GetIndexFilePath(table_id, field_ids));
+    }
+
+
+    return std::shared_ptr<Result>{new TextResult{"Query OK"}};
+}

@@ -6,6 +6,7 @@
 #define DBS_TUTORIAL_DBSYSTEM_H
 
 #include <vector>
+#include <algorithm>
 #include <string>
 #include <memory>
 #include <unordered_map>
@@ -53,8 +54,19 @@ public:
     std::shared_ptr<Result> DropPrimaryKey(const std::string &table_name);
 
     std::shared_ptr<Result> AddIndex(const std::string &table_name, const std::vector<std::string> &field_name);
+    std::shared_ptr<Result> AddIndex(TableID table_id, const std::vector<FieldID>& field_ids, bool is_user);
 
     std::shared_ptr<Result> DropIndex(const std::string &table_name, const std::vector<std::string> &field_name);
+    std::shared_ptr<Result> DropIndex(TableID table_id, const std::vector<FieldID>& field_ids, bool is_user);
+
+    static std::string GetIndexFilePath(TableID table_id, const std::vector<FieldID>& field_ids) {
+        auto field_string = std::to_string(field_ids[0]);
+        for (auto i = 1; i < field_ids.size(); ++i) {
+            field_string += "_" + std::to_string(field_ids[i]);
+        }
+        return fmt::format(TABLE_INDEX_PATTERN, table_id, field_string);
+    }
+
 
     /**
      * Delete records satisfying `cond`
@@ -137,6 +149,7 @@ private:
     FileID table_info_fd{-1};
     std::unordered_map<TableID, FileID> table_data_fd;
     std::unordered_map<TableID, FileID> table_meta_fd;
+    std::map<std::pair<TableID, std::vector<FieldID>>, FileID> table_index_fd;
     std::unordered_map<TableID, std::shared_ptr<TableMeta>> meta_map;
     boost::bimap<std::string, TableID> table_name_map;
     bool on_use{false};

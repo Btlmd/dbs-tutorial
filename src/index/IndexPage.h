@@ -64,9 +64,7 @@ class IndexPage {
         header.parent_page = -1;
     }
 
-    RecordSize IndexRecordSize() {
-        return meta.Size(header.is_leaf);
-    }
+    RecordSize IndexRecordSize();
 
     bool IsLeaf() const {
         return header.is_leaf;
@@ -108,13 +106,8 @@ class IndexPage {
         page->SetDirty();
     }
 
-    bool IsOverflow() {
-        return header.child_cnt > meta.m;
-    }
-
-    bool IsUnderflow(bool is_root) {
-        return header.child_cnt < (meta.m + 1) / 2 && !is_root;
-    }
+    bool IsOverflow();
+    bool IsUnderflow(bool is_root);
 
     std::shared_ptr<IndexRecord> CastRecord(std::shared_ptr<IndexRecord> ptr) {
         if (IsLeaf()) {

@@ -120,4 +120,3 @@ void FileSystem::RemoveFile(const std::string &path) {
     Trace("Remove file " << path);
 }
 
-

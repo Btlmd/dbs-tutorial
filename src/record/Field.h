@@ -44,9 +44,25 @@ public:
 class IndexKey {
    public:
     FieldID field_count{0};
-    int reference_count{0};
-    bool can_drop{true};  // Whether it can be dropped directly. If index added by user manually, then true.
+    int reference_count{0};  // Constraint count
+    bool user_created{true};  // Whether it can be dropped directly. If index added by user manually, then true.
                             // Else index was added by other key constraints, false.
+    // In face of user insertion:
+    // If user_created == true, raise error (Already exists by user)
+    // If user_created == false, mark user created as true
+
+    // In face of user deletion:
+    // If user_created == true, mark user_created as false
+    // If user_created == false, raise error (Cannot drop, do not exist)
+
+    // In face of constraint insertion:
+    // Add reference_count by 1
+
+    // In face of constraint deletion:
+    // Remove 1 from reference_count
+
+    // Delete key if and only if reference_count == 0 and user_created == false
+
     FieldID fields[MAX_FIELD_COUNT];
 
     bool operator==(const IndexKey &other) const {
