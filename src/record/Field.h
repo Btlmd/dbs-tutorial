@@ -31,6 +31,13 @@ public:
     FieldID field_count;
     FieldID fields[MAX_FIELD_COUNT];
 
+    [[nodiscard]] std::vector<FieldID> to_vector() const {
+        std::vector<FieldID> fields;
+        for (FieldID i{0}; i < field_count; ++i) {
+            fields.push_back(fields[i]);
+        }
+        return std::move(fields);
+    }
 };
 
 class ForeignKey {
@@ -40,6 +47,22 @@ public:
     FieldID fields[MAX_FIELD_COUNT];
     TableID reference_table;
     FieldID reference_fields[MAX_FIELD_COUNT];
+
+    [[nodiscard]] std::vector<FieldID> to_vector() const {
+        std::vector<FieldID> fields;
+        for (FieldID i{0}; i < field_count; ++i) {
+            fields.push_back(fields[i]);
+        }
+        return std::move(fields);
+    }
+
+    [[nodiscard]] std::vector<FieldID> reference_to_vector() const {
+        std::vector<FieldID> fields;
+        for (FieldID i{0}; i < field_count; ++i) {
+            fields.push_back(reference_fields[i]);
+        }
+        return std::move(fields);
+    }
 };
 
 class UniqueKey {
@@ -47,14 +70,22 @@ public:
     char name[CONSTRAINT_NAME_LEN_MAX + 1];
     FieldID field_count;
     FieldID fields[MAX_FIELD_COUNT];
+
+    [[nodiscard]] std::vector<FieldID> to_vector() const {
+        std::vector<FieldID> fields;
+        for (FieldID i{0}; i < field_count; ++i) {
+            fields.push_back(fields[i]);
+        }
+        return std::move(fields);
+    }
 };
 
 class IndexKey {
-   public:
+public:
     FieldID field_count{0};
     int reference_count{0};  // Constraint count
     bool user_created{true};  // Whether it can be dropped directly. If index added by user manually, then true.
-                            // Else index was added by other key constraints, false.
+    // Else index was added by other key constraints, false.
     // In face of user insertion:
     // If user_created == true, raise error (Already exists by user)
     // If user_created == false, mark user created as true
@@ -109,6 +140,8 @@ public:
      * @param dst
      */
     virtual void Write(uint8_t *&dst) const = 0;
+
+    virtual std::size_t Hash() const = 0;
 
     [[nodiscard]] virtual std::string ToString() const = 0;
 
@@ -174,7 +207,9 @@ public:
         write_var(dst, value);
     }
 
-private:
+    [[nodiscard]] std::size_t Hash() const override {
+        return *(uint32_t *) (&value);
+    }
 };
 
 class Int : public Field {
@@ -219,6 +254,10 @@ public:
 
     [[nodiscard]] std::shared_ptr<Float> ToFloat() const {
         return std::make_shared<Float>(value);
+    }
+
+    [[nodiscard]] std::size_t Hash() const override {
+        return *(uint32_t *) (&value);
     }
 };
 
@@ -286,9 +325,15 @@ public:
     void Write(uint8_t *&dst) const override {
         write_var(dst, value);
     }
+
+    [[nodiscard]] std::size_t Hash() const override {
+        return *(uint32_t *) (&value);
+    }
 };
 
 class String : public Field {
+private:
+    static std::hash<std::string> hash;
 public:
     std::string data;
 
@@ -321,6 +366,10 @@ public:
     }
 
     ~String() = default;
+
+    [[nodiscard]] std::size_t Hash() const override {
+        return hash(data);
+    }
 };
 
 class Char : public String {
@@ -513,12 +562,26 @@ std::shared_ptr<Field> inline operator "" _f(long double el) {
     return std::make_shared<Float>(el);
 }
 
-std::shared_ptr<Field> inline operator "" _v(const char * el, std::size_t s) {
+std::shared_ptr<Field> inline operator "" _v(const char *el, std::size_t s) {
     return std::make_shared<VarChar>(std::string{el, s});
 }
 
 std::shared_ptr<Field> inline _ch(std::string data, RecordSize max_l) {
     return std::make_shared<Char>(data, max_l);
 }
+
+class FieldHash {
+public:
+    std::size_t operator()(const std::shared_ptr<Field> &f) const {
+        return f->Hash();
+    }
+};
+
+class FieldEqual {
+public:
+    bool operator()(const std::shared_ptr<Field> &lhs, const std::shared_ptr<Field> &rhs) const {
+        return *lhs == *rhs;
+    }
+};
 
 #endif //DBS_TUTORIAL_FIELD_H

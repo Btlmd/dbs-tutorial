@@ -95,15 +95,20 @@ public:
         size = -1;
     }
 
-#ifdef DEBUG
-
     /**
      * Return a string representation of the record
-     * Used for debugging log
      * @return
      */
     [[nodiscard]] std::string Repr() const {
         return "(" + boost::algorithm::join(ToString(), ", ") + ")";
+    }
+
+    std::vector<std::shared_ptr<Field>> Project(const std::vector<FieldID> target) const {
+        std::vector<std::shared_ptr<Field>> fields_new;
+        for (const auto &pos: target) {
+            fields_new.push_back(fields[pos]);
+        }
+        return std::move(fields);
     }
 
     bool operator == (const Record& rhs) const {
@@ -115,7 +120,6 @@ public:
         return true;
     }
 
-#endif
 private:
     RecordSize size{-1};
 };

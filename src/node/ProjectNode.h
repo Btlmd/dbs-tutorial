@@ -25,11 +25,7 @@ public:
         RecordList downstream{children[0]->Next()};
         RecordList ret;
         for (const auto &record: downstream) {
-            std::vector<std::shared_ptr<Field>> fields;
-            for (const auto &pos: target) {
-                fields.push_back(record->fields[pos]);
-            }
-            ret.push_back(std::make_shared<Record>(std::move(fields)));
+            ret.push_back(std::make_shared<Record>(record->Project(target)));
         }
         return ret;
     }
