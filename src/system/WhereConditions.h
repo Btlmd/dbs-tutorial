@@ -8,6 +8,7 @@
 #include <defines.h>
 #include <record/Field.h>
 #include <record/Record.h>
+#include <node/OpNode.h>
 #include <exception/OperationException.h>
 
 #include <memory>

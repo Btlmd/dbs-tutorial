@@ -254,9 +254,8 @@ antlrcpp::Any DBVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) 
                 and_cond->AddCondition(i->second);
             }
         }
-        table_scanners.insert({table_id, system.GetTrivialScanNode(table_id, and_cond)});
 
-        // TODO: [c7w] add index scan node when applicable
+        table_scanners.insert({table_id, system.GetScanNodeByCondition(table_id, and_cond)});
     }
 
     // join tables

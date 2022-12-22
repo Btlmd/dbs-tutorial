@@ -260,17 +260,43 @@ DBSystem::CreateTable(const std::string &table_name, const std::vector<std::shar
 
 std::shared_ptr<Result> DBSystem::DropTable(const std::string &table_name) {
     auto table_id{GetTableID(table_name)};
+
+    for (auto iter = table_index_file.begin(); iter != table_index_file.end();) {
+        if (iter->first.first == table_id) {
+            iter = table_index_file.erase(iter);
+        } else {
+            ++iter;
+        }
+    }
+
     buffer.CloseFile(table_meta_fd[table_id]);
     buffer.CloseFile(table_data_fd[table_id]);
+    for (auto& iter : table_index_fd) {
+        if (iter.first.first == table_id) {
+            buffer.CloseFile(iter.second);
+        }
+    }
+
     FileSystem::RemoveFile(DB_DIR / current_database / fmt::format(TABLE_DATA_PATTERN, table_id));
     FileSystem::RemoveFile(DB_DIR / current_database / fmt::format(TABLE_META_PATTERN, table_id));
-
-    // TODO: drop index
+    for (auto& iter : table_index_fd) {
+        if (iter.first.first == table_id) {
+            FileSystem::RemoveFile(DB_DIR / current_database / GetIndexFilePath(table_id, iter.first.second));
+        }
+    }
 
     table_data_fd.erase(table_id);
     table_meta_fd.erase(table_id);
     meta_map.erase(table_id);
     table_name_map.right.erase(table_id);
+    for (auto iter = table_index_fd.begin(); iter != table_index_fd.end();) {
+        if (iter->first.first == table_id) {
+            iter = table_index_fd.erase(iter);
+        } else {
+            ++iter;
+        }
+    }
+
     --table_count;
     return std::make_shared<TextResult>("Query OK");
 }
@@ -405,19 +431,34 @@ std::shared_ptr<DataPage> DBSystem::FindPageWithSpace(TableID table_id, RecordSi
      * Dummy implementation: check page by page
      */
     auto data_fd{table_data_fd[table_id]};
-    for (int i{0}; i < meta->data_page_count; ++i) {
-        auto page{buffer.ReadPage(data_fd, i)};
-        auto data_page{std::make_shared<DataPage>(page, *meta)};
-        if (data_page->Contains(size)) {
-            return data_page;
-        }
-    }
+//    for (int i{0}; i < meta->data_page_count; ++i) {
+//        auto page{buffer.ReadPage(data_fd, i)};
+//        auto data_page{std::make_shared<DataPage>(page, *meta)};
+//        if (data_page->Contains(size)) {
+//            return data_page;
+//        }
+//    }
+    PageID search_result = meta->fsm.SearchFreeSpace(size);
 
     // no enough space on current pages
-    auto page{buffer.CreatePage(data_fd, meta->data_page_count++)};
-    auto data_page{std::make_shared<DataPage>(page, *meta)};
-    data_page->Init();
-    return data_page;
+    if (search_result == -1) {
+//        auto page{buffer.ReadPage(data_fd, meta->data_page_count)};
+//        auto data_page{std::make_shared<DataPage>(page, *meta)};
+//        meta->fsm.AddPage(meta->data_page_count);
+//        ++meta->data_page_count;
+//        return data_page;
+        PageID page_id = meta->data_page_count;
+        auto page{buffer.CreatePage(data_fd, meta->data_page_count++)};
+        auto data_page{std::make_shared<DataPage>(page, *meta)};
+        data_page->Init();
+        meta->fsm.UpdateFreeSpace(page_id, data_page->header.free_space);
+        return data_page;
+
+    } else {
+        auto page{buffer.ReadPage(data_fd, search_result)};
+        auto data_page{std::make_shared<DataPage>(page, *meta)};
+        return data_page;
+    }
 }
 
 void DBSystem::CheckConstraintInsert(const TableMeta &meta, const std::shared_ptr<Record> &record) {
@@ -634,6 +675,16 @@ std::shared_ptr<OpNode> DBSystem::GetTrivialScanNode(TableID table_id, const std
     return std::make_shared<TrivialScanNode>(buffer, meta_map[table_id], cond, table_data_fd[table_id]);
 }
 
+
+std::shared_ptr<OpNode> DBSystem::GetIndexScanNode(TableID table_id, std::vector<FieldID> field_ids,
+                                                   const std::shared_ptr<FilterCondition> &cond,
+                                                   const std::shared_ptr<IndexField> &key_start,
+                                                   const std::shared_ptr<IndexField> &key_end) {
+    auto index_file = GetIndexFile(table_id, field_ids);
+    return std::make_shared<IndexScanNode>(buffer, meta_map[table_id], cond, table_data_fd[table_id], *index_file, key_start, key_end);
+}
+
+
 std::shared_ptr<Result> DBSystem::Select(const std::vector<std::string> &header, const std::shared_ptr<OpNode> &plan) {
     auto records{plan->All()};
     return std::make_shared<TableResult>(header, std::move(records));
@@ -716,6 +767,11 @@ DBSystem::Update(TableID table_id, const std::vector<std::pair<std::shared_ptr<F
                     InsertRecord(table_id, updated_record); // index inserted through this function
                 } else {  // in-place update
                     dp.Update(j, updated_record);
+
+                    // update fsm
+                    auto meta{meta_map[table_id]};
+                    meta->fsm.UpdateFreeSpace(dp.page->id, dp.header.free_space);
+
                     UpdateInPlaceRecordIndex(affected, table_id, page->id, j, record, updated_record);
                 }
             }
@@ -728,6 +784,11 @@ DBSystem::Update(TableID table_id, const std::vector<std::pair<std::shared_ptr<F
 void DBSystem::InsertRecord(TableID table_id, const std::shared_ptr<Record> &record) {
     auto page{FindPageWithSpace(table_id, record->Size())};
     auto slot_id{page->Insert(record)};
+
+    // Update fsm free space
+    auto meta{meta_map[table_id]};
+    meta->fsm.UpdateFreeSpace(page->page->id, page->header.free_space);
+
     InsertRecordIndex(table_id, page->page->id, slot_id, record);
 }
 
@@ -897,6 +958,7 @@ std::shared_ptr<Result> DBSystem::DropIndex(TableID table_id, const std::vector<
     return std::shared_ptr<Result>{new TextResult{"Query OK"}};
 }
 
+
 void DBSystem::DropRecordIndex(TableID table_id, PageID page_id, SlotID j, const std::shared_ptr<Record> record) {
     for (const auto &ik: meta_map[table_id]->index_keys) {
         if (ik->field_count == 1) {
@@ -904,8 +966,8 @@ void DBSystem::DropRecordIndex(TableID table_id, PageID page_id, SlotID j, const
             GetIndexFile(table_id, ik->fields[0])->DeleteRecord(page_id, j, index_field);
             continue;
         }
-        if (ik->field_count == 2) {
-            auto index_field{IndexINT::FromDataField({record->fields[ik->fields[0]], record->fields[ik->fields[1]]})};
+        else if (ik->field_count == 2) {
+            auto index_field{IndexINT2::FromDataField({record->fields[ik->fields[0]], record->fields[ik->fields[1]]})};
             GetIndexFile(table_id, ik->fields[0], ik->fields[1])->DeleteRecord(page_id, j, index_field);
             continue;
         }
@@ -919,8 +981,8 @@ void DBSystem::InsertRecordIndex(TableID table_id, PageID page_id, SlotID j, con
             GetIndexFile(table_id, ik->fields[0])->InsertRecord(page_id, j, index_field);
             continue;
         }
-        if (ik->field_count == 2) {
-            auto index_field{IndexINT::FromDataField({record->fields[ik->fields[0]], record->fields[ik->fields[1]]})};
+        else if (ik->field_count == 2) {
+            auto index_field{IndexINT2::FromDataField({record->fields[ik->fields[0]], record->fields[ik->fields[1]]})};
             GetIndexFile(table_id, ik->fields[0], ik->fields[1])->InsertRecord(page_id, j, index_field);
             continue;
         }
@@ -949,9 +1011,9 @@ DBSystem::UpdateInPlaceRecordIndex(const std::unordered_set<FieldID> &affected,
                 continue;
             }
             auto index_field{
-                    IndexINT::FromDataField({record_prev->fields[ik->fields[0]], record_prev->fields[ik->fields[1]]})};
+                    IndexINT2::FromDataField({record_prev->fields[ik->fields[0]], record_prev->fields[ik->fields[1]]})};
             GetIndexFile(table_id, ik->fields[0], ik->fields[1])->DeleteRecord(page_id, j, index_field);
-            index_field = IndexINT::FromDataField(
+            index_field = IndexINT2::FromDataField(
                     {record_updated->fields[ik->fields[0]], record_updated->fields[ik->fields[1]]});
             GetIndexFile(table_id, ik->fields[0], ik->fields[1])->InsertRecord(page_id, j, index_field);
             continue;
@@ -1100,4 +1162,34 @@ DBSystem::CheckRecordsUnique(TableID table_id, const std::vector<FieldID> &field
         return *it;
     }
     return std::nullopt;
+}
+
+std::shared_ptr<OpNode> DBSystem::GetScanNodeByCondition(TableID table_id, const std::shared_ptr<AndCondition> &cond) {
+    // Iterate through table indexes
+    auto table_meta{meta_map[table_id]};
+    auto index_keys = table_meta->index_keys;
+
+    int valid_cnt = 0;
+    std::vector<FieldID> field_ids;
+    std::shared_ptr<IndexField> key_start, key_end;
+
+    for (auto& index_key : index_keys) {
+        auto result = index_key->FilterCondition(cond);
+        if (result.first > valid_cnt) {
+            valid_cnt = result.first;
+            key_start = result.second.first;
+            key_end = result.second.second;
+
+            field_ids.clear();
+            for (int i = 0; i < index_key->field_count; ++i) {
+                field_ids.push_back(index_key->fields[i]);
+            }
+        }
+    }
+
+    if (valid_cnt == 0) {
+        return GetTrivialScanNode(table_id, cond);
+    } else {
+        return GetIndexScanNode(table_id, field_ids, cond, key_start, key_end);
+    }
 }

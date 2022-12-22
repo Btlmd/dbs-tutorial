@@ -97,6 +97,14 @@ std::shared_ptr<TableMeta> TableMeta::FromSrc(FileID fd, BufferSystem &buffer) {
         ret->field_meta.Insert(FieldMeta::FromSrc(src));
     }
 
+    // Free space manager
+    NextPage();
+    bool finish_flag = ret->fsm.FromSrc(src, true);
+    while (!finish_flag) {
+        NextPage();
+        finish_flag = ret->fsm.FromSrc(src, false);
+    }
+
     return ret;
 }
 
@@ -153,5 +161,13 @@ void TableMeta::Write() {
         }
         auto &f{field_meta.meta[i]};
         f->Write(dst);
+    }
+
+    // Free space manager
+    NextPage();
+    bool flag = fsm.Write(dst, true);
+    while (!flag) {
+        NextPage();
+        flag = fsm.Write(dst, false);
     }
 }

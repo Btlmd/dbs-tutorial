@@ -115,6 +115,18 @@ public:
         }
         return true;
     }
+
+    [[nodiscard]] FieldID Find(FieldID field_id) const {
+        for (int i = 0; i < field_count; ++i) {
+            if (fields[i] == field_id) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    std::pair<int, std::pair<std::shared_ptr<class IndexField>, std::shared_ptr<class IndexField>>>
+        FilterCondition(const std::shared_ptr<class AndCondition>& and_cond);
 };
 
 class Field {

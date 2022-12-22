@@ -5,18 +5,19 @@
 #ifndef DBS_TUTORIAL_TABLEMETA_H
 #define DBS_TUTORIAL_TABLEMETA_H
 
+#include <defines.h>
+#include <exception/OperationException.h>
+#include <fmt/core.h>
+#include <io/BufferSystem.h>
+#include <record/Field.h>
+
+#include <boost/bimap.hpp>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
-#include <boost/bimap.hpp>
+#include <record/FreeSpaceManager.h>
 
-#include <stdexcept>
-#include <fmt/core.h>
-
-#include <defines.h>
-#include <record/Field.h>
-#include <io/BufferSystem.h>
-#include <exception/OperationException.h>
 
 class FieldMetaTable {
 public:
@@ -77,6 +78,8 @@ public:
     std::vector<std::shared_ptr<ForeignKey>> foreign_keys;
     std::vector<std::shared_ptr<UniqueKey>> unique_keys;
     std::vector<std::shared_ptr<IndexKey>> index_keys;  // （table id + fields）
+
+    FreeSpaceManager fsm;
 
     /**
      * Write TableMeta to file
