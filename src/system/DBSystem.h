@@ -86,6 +86,10 @@ public:
      * @return
      */
     std::shared_ptr<OpNode> GetTrivialScanNode(TableID table_id, const std::shared_ptr<FilterCondition> &cond);
+    std::shared_ptr<OpNode> GetIndexScanNode(TableID table_id, std::vector<FieldID> field_ids, const std::shared_ptr<FilterCondition> &cond,
+                                             const std::shared_ptr<IndexField>& key_start, const std::shared_ptr<IndexField>& key_end);
+
+    std::shared_ptr<OpNode> GetScanNodeByCondition(TableID table_id, const std::shared_ptr<AndCondition> &cond);
 
     /**
      * Select from execution tree
@@ -219,6 +223,30 @@ private:
 
     void InsertRecord(TableID table_id, const std::shared_ptr<Record> &record);
 
+
+    /**
+     * Get IndexFile for std::vector
+     * @param table_id
+     * @param fields
+     * @param value
+     */
+    std::shared_ptr<IndexFile> GetIndexFile(TableID table_id, const std::vector<FieldID> &fields) {
+        auto ident{std::make_pair(table_id, fields)};
+        auto it_if{table_index_file.find(ident)};
+        if (it_if != table_index_file.end()) {
+            return it_if->second;
+        }
+
+        auto it{table_index_fd.find(std::make_pair(table_id, fields))};
+        if (it == table_index_fd.end()) {
+            throw OperationError{"Internal Error! No index."};
+        }
+        auto ret{std::make_shared<IndexFile>(buffer, it->second)};
+        table_index_file[ident] = ret;
+        return ret;
+    }
+
+
     /**
      * Get IndexFile for single field index
      * @param table_id
@@ -226,7 +254,7 @@ private:
      * @param value
      */
     std::shared_ptr<IndexFile> GetIndexFile(TableID table_id, FieldID field_id) {
-        std::vector<FieldID> fields{field_id};
+        std::vector<FieldID> fields{{field_id}};
         auto ident{std::make_pair(table_id, fields)};
         auto it_if{table_index_file.find(ident)};
         if (it_if != table_index_file.end()) {

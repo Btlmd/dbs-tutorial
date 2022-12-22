@@ -541,6 +541,16 @@ std::shared_ptr<OpNode> DBSystem::GetTrivialScanNode(TableID table_id, const std
     return std::make_shared<TrivialScanNode>(buffer, meta_map[table_id], cond, table_data_fd[table_id]);
 }
 
+
+std::shared_ptr<OpNode> DBSystem::GetIndexScanNode(TableID table_id, std::vector<FieldID> field_ids,
+                                                   const std::shared_ptr<FilterCondition> &cond,
+                                                   const std::shared_ptr<IndexField> &key_start,
+                                                   const std::shared_ptr<IndexField> &key_end) {
+    auto index_file = GetIndexFile(table_id, field_ids);
+    return std::make_shared<IndexScanNode>(buffer, meta_map[table_id], cond, table_data_fd[table_id], *index_file, key_start, key_end);
+}
+
+
 std::shared_ptr<Result> DBSystem::Select(const std::vector<std::string> &header, const std::shared_ptr<OpNode> &plan) {
     auto records{plan->All()};
     return std::make_shared<TableResult>(header, std::move(records));
@@ -798,6 +808,7 @@ std::shared_ptr<Result> DBSystem::DropIndex(TableID table_id, const std::vector<
     return std::shared_ptr<Result>{new TextResult{"Query OK"}};
 }
 
+
 void DBSystem::DropRecordIndex(TableID table_id, PageID page_id, SlotID j, const std::shared_ptr<Record> record) {
     for (const auto &ik: meta_map[table_id]->index_keys) {
         if (ik->field_count == 1) {
@@ -805,8 +816,8 @@ void DBSystem::DropRecordIndex(TableID table_id, PageID page_id, SlotID j, const
             GetIndexFile(table_id, ik->fields[0])->DeleteRecord(page_id, j, index_field);
             continue;
         }
-        if (ik->field_count == 2) {
-            auto index_field{IndexINT::FromDataField({record->fields[ik->fields[0]], record->fields[ik->fields[1]]})};
+        else if (ik->field_count == 2) {
+            auto index_field{IndexINT2::FromDataField({record->fields[ik->fields[0]], record->fields[ik->fields[1]]})};
             GetIndexFile(table_id, ik->fields[0], ik->fields[1])->DeleteRecord(page_id, j, index_field);
             continue;
         }
@@ -820,8 +831,8 @@ void DBSystem::InsertRecordIndex(TableID table_id, PageID page_id, SlotID j, con
             GetIndexFile(table_id, ik->fields[0])->InsertRecord(page_id, j, index_field);
             continue;
         }
-        if (ik->field_count == 2) {
-            auto index_field{IndexINT::FromDataField({record->fields[ik->fields[0]], record->fields[ik->fields[1]]})};
+        else if (ik->field_count == 2) {
+            auto index_field{IndexINT2::FromDataField({record->fields[ik->fields[0]], record->fields[ik->fields[1]]})};
             GetIndexFile(table_id, ik->fields[0], ik->fields[1])->InsertRecord(page_id, j, index_field);
             continue;
         }
@@ -850,12 +861,43 @@ DBSystem::UpdateInPlaceRecordIndex(const std::unordered_set<FieldID> &affected,
                 continue;
             }
             auto index_field{
-                    IndexINT::FromDataField({record_prev->fields[ik->fields[0]], record_prev->fields[ik->fields[1]]})};
+                    IndexINT2::FromDataField({record_prev->fields[ik->fields[0]], record_prev->fields[ik->fields[1]]})};
             GetIndexFile(table_id, ik->fields[0], ik->fields[1])->DeleteRecord(page_id, j, index_field);
-            index_field = IndexINT::FromDataField(
+            index_field = IndexINT2::FromDataField(
                     {record_updated->fields[ik->fields[0]], record_updated->fields[ik->fields[1]]});
             GetIndexFile(table_id, ik->fields[0], ik->fields[1])->InsertRecord(page_id, j, index_field);
             continue;
         }
+    }
+}
+
+
+std::shared_ptr<OpNode> DBSystem::GetScanNodeByCondition(TableID table_id, const std::shared_ptr<AndCondition> &cond) {
+    // Iterate through table indexes
+    auto table_meta{meta_map[table_id]};
+    auto index_keys = table_meta->index_keys;
+
+    int valid_cnt = 0;
+    std::vector<FieldID> field_ids;
+    std::shared_ptr<IndexField> key_start, key_end;
+
+    for (auto& index_key : index_keys) {
+        auto result = index_key->FilterCondition(cond);
+        if (result.first > valid_cnt) {
+            valid_cnt = result.first;
+            key_start = result.second.first;
+            key_end = result.second.second;
+
+            field_ids.clear();
+            for (int i = 0; i < index_key->field_count; ++i) {
+                field_ids.push_back(index_key->fields[i]);
+            }
+        }
+    }
+
+    if (valid_cnt == 0) {
+        return GetTrivialScanNode(table_id, cond);
+    } else {
+        return GetIndexScanNode(table_id, field_ids, cond, key_start, key_end);
     }
 }

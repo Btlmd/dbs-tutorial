@@ -15,6 +15,7 @@ enum IndexFieldType {
     INT2  // std::pair<INT, INT>, joint indexing
 };
 
+
 class IndexField {
    public:
     IndexFieldType type;
