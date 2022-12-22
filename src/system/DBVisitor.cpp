@@ -201,7 +201,7 @@ antlrcpp::Any DBVisitor::visitInsert_into_table(SQLParser::Insert_into_tableCont
                 fields.push_back(GetValue(value_list[i], field_seq[i]));
             }
             auto record{std::make_shared<Record>(std::move(fields))};
-            system.CheckConstraint(table_meta, record);
+            system.CheckConstraintInsert(table_meta, record);
             records.push_back(record);
         } catch (OperationError &e) {
             auto msg{e.what()};

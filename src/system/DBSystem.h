@@ -10,6 +10,7 @@
 #include <string>
 #include <memory>
 #include <unordered_map>
+#include <optional>
 
 #include <boost/bimap.hpp>
 
@@ -50,7 +51,9 @@ public:
 
     std::shared_ptr<Result> AddPrimaryKey(const std::string &table_name, const RawPrimaryKey &raw_pk);
 
-    std::shared_ptr<Result> DropForeignKey(const std::string &table_name, const std::string fk_name);
+    std::shared_ptr<Result> AddUnique(const std::string &table_name, std::string& name, const std::vector<std::string> &fields);
+
+    std::shared_ptr<Result> DropForeignKey(const std::string &table_name, const std::string &fk_name);
 
     std::shared_ptr<Result> DropPrimaryKey(const std::string &table_name);
 
@@ -112,7 +115,22 @@ public:
      * @param meta
      * @param record
      */
-    void CheckConstraint(const TableMeta &meta, const std::shared_ptr<Record> &record);
+    void CheckConstraintInsert(const TableMeta &meta, const std::shared_ptr<Record> &record);
+
+    /**
+     * Validate that the update does not break any constraint
+     * @param meta
+     * @param record_prev
+     * @param record_updated
+     */
+    void CheckConstraintUpdate(const TableMeta &meta, const std::shared_ptr<Record> &record_prev, const std::shared_ptr<Record> &record_updated);
+
+    /**
+     * Validate that the deletion does not break any constraint
+     * @param meta
+     * @param record
+     */
+    void CheckConstraintDelete(const TableMeta &meta, const std::shared_ptr<Record> &record);
 
     /**
      * Get a const pointer to TableMeta of the specific table
@@ -183,7 +201,9 @@ private:
      * @param table_id
      * @param raw_pk
      */
-    static void AddPrimaryKey(std::shared_ptr<TableMeta> &meta, const RawPrimaryKey &raw_pk);
+    void AddPrimaryKey(std::shared_ptr<TableMeta> &meta, const RawPrimaryKey &raw_pk);
+
+    void AddUnique(std::shared_ptr<TableMeta> &meta, std::string& name, const std::vector<std::string> &fields);
 
     /**
      *
@@ -225,7 +245,7 @@ private:
      * @param field_id
      * @param value
      */
-    std::shared_ptr<IndexFile> GetIndexFile(TableID table_id, FieldID field_id) {
+    std::shared_ptr<IndexFile> &GetIndexFile(TableID table_id, FieldID field_id) {
         std::vector<FieldID> fields{field_id};
         auto ident{std::make_pair(table_id, fields)};
         auto it_if{table_index_file.find(ident)};
@@ -239,7 +259,7 @@ private:
         }
         auto ret{std::make_shared<IndexFile>(buffer, it->second)};
         table_index_file[ident] = ret;
-        return ret;
+        return table_index_file[ident];
     }
 
     /**
@@ -249,7 +269,7 @@ private:
      * @param field_id2
      * @return
      */
-    std::shared_ptr<IndexFile> GetIndexFile(TableID table_id, FieldID field_id1, FieldID field_id2) {
+    std::shared_ptr<IndexFile> &GetIndexFile(TableID table_id, FieldID field_id1, FieldID field_id2) {
         std::vector<FieldID> fields{{field_id1, field_id2}};
         auto ident{std::make_pair(table_id, fields)};
         auto it_if{table_index_file.find(ident)};
@@ -263,7 +283,7 @@ private:
         }
         auto ret{std::make_shared<IndexFile>(buffer, it->second)};
         table_index_file[ident] = ret;
-        return ret;
+        return table_index_file[ident];
     }
 
     /**
@@ -275,8 +295,24 @@ private:
      */
     void DropRecordIndex(TableID table_id, PageID page_id, SlotID j, const std::shared_ptr<Record> record);
 
+    /**
+     * Insert index for `record`
+     * @param table_id
+     * @param page_id
+     * @param j
+     * @param record
+     */
     void InsertRecordIndex(TableID table_id, PageID page_id, SlotID j, const std::shared_ptr<Record> record);
 
+    /**
+     * Update index for in-place index update, only update fields that changed
+     * @param affected
+     * @param table_id
+     * @param page_id
+     * @param j
+     * @param record_prev
+     * @param record_updated
+     */
     void UpdateInPlaceRecordIndex(
             const std::unordered_set<FieldID> &affected,
             TableID table_id, PageID page_id, SlotID j,
@@ -284,6 +320,40 @@ private:
             const std::shared_ptr<Record> &record_updated
     );
 
+    /**
+     *
+     * @param table_id
+     * @param fields
+     * @param field_vals
+     * @return
+     */
+    std::size_t TupleExists(TableID table_id, const std::vector<FieldID> &fields, const std::vector<std::shared_ptr<Field>>& field_vals);
+
+    std::vector<std::pair<TableID, std::shared_ptr<ForeignKey>>> GetParentTables(TableID table_id);
+
+    template<FieldID lim>
+    void AddIndexLimited(TableID table_id, const std::vector<FieldID> &field_ids, bool is_user) {
+        std::vector<FieldID> index_fields;
+        for (FieldID i{0}; i < std::min<std::size_t>(lim, field_ids.size()); ++i) {
+            index_fields.push_back(field_ids[i]);
+        }
+        AddIndex(table_id, index_fields, is_user);
+    }
+
+    template<FieldID lim>
+    void DropIndexLimited(TableID table_id, const std::vector<FieldID> &field_ids, bool is_user) {
+        std::vector<FieldID> index_fields;
+        for (FieldID i{0}; i < std::min<std::size_t>(lim, field_ids.size()); ++i) {
+            index_fields.push_back(field_ids[i]);
+        }
+        DropIndex(table_id, index_fields, is_user);
+    }
+
+    void DropForeignKey(TableID table_id, const std::string &fk_name);
+
+    void DropPrimaryKey(TableID table_id);
+
+    std::optional<std::shared_ptr<Record>> CheckRecordsUnique(TableID table_id, const std::vector<FieldID> &fields);
 };
 
 #endif //DBS_TUTORIAL_DBSYSTEM_H

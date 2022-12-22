@@ -584,4 +584,30 @@ public:
     }
 };
 
+/**
+ * Used for sorting field
+ * Order `NULL` as the smallest element
+ */
+class FieldCompare {
+public:
+    /**
+     * return true if l_f is consider less than r_f
+     * @param l_f
+     * @param r_f
+     * @return
+     */
+    bool operator()(const std::shared_ptr<Field> &l_f, const std::shared_ptr<Field> &r_f) const {
+        if (l_f->is_null && r_f->is_null) {
+            return false;
+        }
+        if (l_f->is_null && !r_f->is_null) {
+            return true;
+        }
+        if (!l_f->is_null && r_f->is_null) {
+            return false;
+        }
+        return *l_f < *r_f;
+    }
+};
+
 #endif //DBS_TUTORIAL_FIELD_H

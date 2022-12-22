@@ -124,4 +124,27 @@ private:
     RecordSize size{-1};
 };
 
+class RecordEqual{
+public:
+    const std::vector<FieldID> fields;
+
+    RecordEqual(std::vector<FieldID> fields) : fields{std::move(fields)} {}
+
+    bool operator()(const std::shared_ptr<Record> &lhs, const std::shared_ptr<Record> &rhs) {
+        for (const auto i: fields) {
+            if (lhs->fields[i]->is_null && rhs->fields[i]->is_null) {
+                continue;
+            }
+            if (!lhs->fields[i]->is_null && !rhs->fields[i]->is_null) {
+                if (lhs->fields[i] == rhs->fields[i]) {
+                    continue;
+                } else {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+};
+
 #endif //DBS_TUTORIAL_RECORD_H

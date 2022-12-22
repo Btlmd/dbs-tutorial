@@ -52,23 +52,15 @@ public:
         // sort downstream records
         RecordList records{children[0]->All()};
         auto record_len{static_cast<FieldID>(aggregators.size())};
+        FieldCompare comp;
         if (group_by_col >= 0) {
             // sort by the last field
             std::sort(records.begin(), records.end(),
-                      [this](const std::shared_ptr<Record> &lhs, const std::shared_ptr<Record> &rhs) -> bool {
+                      [this, &comp](const std::shared_ptr<Record> &lhs, const std::shared_ptr<Record> &rhs) -> bool {
                           // make NULL the smallest
                           auto l_f{lhs->fields[group_by_col]};
                           auto r_f{rhs->fields[group_by_col]};
-                          if (l_f->is_null && r_f->is_null) {
-                              return false;
-                          }
-                          if (l_f->is_null && !r_f->is_null) {
-                              return true;
-                          }
-                          if (!l_f->is_null && r_f->is_null) {
-                              return false;
-                          }
-                          return *l_f < *r_f;
+                          return comp(l_f, r_f);
                       });
         }
 

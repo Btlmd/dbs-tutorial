@@ -130,7 +130,7 @@ public:
     const FieldID field_position;
     const std::shared_ptr<Cmp> comparer;
 
-    ValueCompareCondition(std::shared_ptr<Field> rhs, TableID table_id, FieldID pos, std::shared_ptr<Cmp> &cmp) :
+    ValueCompareCondition(std::shared_ptr<Field> rhs, TableID table_id, FieldID pos, const std::shared_ptr<Cmp> &cmp) :
             FilterCondition{table_id}, rhs{std::move(rhs)}, field_position{pos}, comparer{std::move(cmp)} {}
 
     bool operator()(const std::shared_ptr<Record> &record) const override {
