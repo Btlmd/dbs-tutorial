@@ -397,19 +397,33 @@ std::shared_ptr<DataPage> DBSystem::FindPageWithSpace(TableID table_id, RecordSi
      * Dummy implementation: check page by page
      */
     auto data_fd{table_data_fd[table_id]};
-    for (int i{0}; i < meta->data_page_count; ++i) {
-        auto page{buffer.ReadPage(data_fd, i)};
-        auto data_page{std::make_shared<DataPage>(page, *meta)};
-        if (data_page->Contains(size)) {
-            return data_page;
-        }
-    }
+//    for (int i{0}; i < meta->data_page_count; ++i) {
+//        auto page{buffer.ReadPage(data_fd, i)};
+//        auto data_page{std::make_shared<DataPage>(page, *meta)};
+//        if (data_page->Contains(size)) {
+//            return data_page;
+//        }
+//    }
+    PageID search_result = meta->fsm.SearchFreeSpace(size);
 
     // no enough space on current pages
-    auto page{buffer.CreatePage(data_fd, meta->data_page_count++)};
-    auto data_page{std::make_shared<DataPage>(page, *meta)};
-    data_page->Init();
-    return data_page;
+    if (search_result == -1) {
+//        auto page{buffer.ReadPage(data_fd, meta->data_page_count)};
+//        auto data_page{std::make_shared<DataPage>(page, *meta)};
+//        meta->fsm.AddPage(meta->data_page_count);
+//        ++meta->data_page_count;
+//        return data_page;
+
+        auto page{buffer.CreatePage(data_fd, meta->data_page_count++)};
+        auto data_page{std::make_shared<DataPage>(page, *meta)};
+        data_page->Init();
+        return data_page;
+
+    } else {
+        auto page{buffer.ReadPage(data_fd, search_result)};
+        auto data_page{std::make_shared<DataPage>(page, *meta)};
+        return data_page;
+    }
 }
 
 void DBSystem::CheckConstraint(const TableMeta &meta, const std::shared_ptr<Record> &record) {

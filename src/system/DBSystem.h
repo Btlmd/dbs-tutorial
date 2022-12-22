@@ -215,6 +215,8 @@ private:
      * @return
      */
     std::shared_ptr<DataPage> FindPageWithSpace(TableID table_id, RecordSize size);
+    void UpdatePageFreeSpace(TableID table_id, PageID page_id, RecordSize delta_size);
+    // Data Page ID -> (FSM Page ID, FSM Slot ID)
 
     /**
      * Throw exception if no database is selected
