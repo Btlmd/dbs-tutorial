@@ -250,17 +250,43 @@ DBSystem::CreateTable(const std::string &table_name, const std::vector<std::shar
 
 std::shared_ptr<Result> DBSystem::DropTable(const std::string &table_name) {
     auto table_id{GetTableID(table_name)};
+
+    for (auto iter = table_index_file.begin(); iter != table_index_file.end();) {
+        if (iter->first.first == table_id) {
+            iter = table_index_file.erase(iter);
+        } else {
+            ++iter;
+        }
+    }
+
     buffer.CloseFile(table_meta_fd[table_id]);
     buffer.CloseFile(table_data_fd[table_id]);
+    for (auto& iter : table_index_fd) {
+        if (iter.first.first == table_id) {
+            buffer.CloseFile(iter.second);
+        }
+    }
+
     FileSystem::RemoveFile(DB_DIR / current_database / fmt::format(TABLE_DATA_PATTERN, table_id));
     FileSystem::RemoveFile(DB_DIR / current_database / fmt::format(TABLE_META_PATTERN, table_id));
-
-    // TODO: drop index
+    for (auto& iter : table_index_fd) {
+        if (iter.first.first == table_id) {
+            FileSystem::RemoveFile(DB_DIR / current_database / GetIndexFilePath(table_id, iter.first.second));
+        }
+    }
 
     table_data_fd.erase(table_id);
     table_meta_fd.erase(table_id);
     meta_map.erase(table_id);
     table_name_map.right.erase(table_id);
+    for (auto iter = table_index_fd.begin(); iter != table_index_fd.end();) {
+        if (iter->first.first == table_id) {
+            iter = table_index_fd.erase(iter);
+        } else {
+            ++iter;
+        }
+    }
+
     --table_count;
     return std::make_shared<TextResult>("Query OK");
 }

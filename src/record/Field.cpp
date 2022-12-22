@@ -127,10 +127,14 @@ std::pair<int, std::pair<std::shared_ptr<IndexField>, std::shared_ptr<IndexField
                                            });
         key_starts.push_back(key_start);
     }
+    for (int dim = max_len; dim < field_count; ++dim) {
+        key_starts.push_back(std::make_shared<IndexINT>(std::numeric_limits<int>::min(), true));
+        key_ends.push_back(std::make_shared<IndexINT>(std::numeric_limits<int>::max(), false));
+    }
 
-    if (max_len == 1) {
+    if (field_count == 1) {
         return {1, {key_starts[0], key_ends[0]}};
-    } else if (max_len == 2) {
+    } else if (field_count == 2) {
         auto key_start = std::make_shared<IndexINT2>(
             std::reinterpret_pointer_cast<IndexINT>(key_starts[0])->value,
             std::reinterpret_pointer_cast<IndexINT>(key_starts[0])->is_null,
