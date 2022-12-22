@@ -22,7 +22,14 @@ class FreeSpaceManager {
 
    public:
 
-    FreeSpaceManager() = default;
+    FreeSpaceManager() {
+        free_pages.clear();
+        for (int i = 0; i <= std::numeric_limits<PageState>::max(); i++) {
+            free_pages.push_back(std::list<PageID>());
+            free_pages[i].clear();
+        }
+        page_states.clear();
+    }
 
     // Returns PageID if found, otherwise returns -1.
     PageID SearchFreeSpace(RecordSize size) {
@@ -35,6 +42,7 @@ class FreeSpaceManager {
             free_pages[i].pop_front();
             return page_id;
         }
+        return -1;
     }
 
     void UpdateFreeSpace(PageID page_id, RecordSize new_freespace_size) {
@@ -57,8 +65,9 @@ class FreeSpaceManager {
 
     bool FromSrc(const uint8_t *&src, bool init = false) {
         if (init) {
-            for (int i = 0; i < std::numeric_limits<PageState>::max(); i++) {
-                free_pages[i] = std::list<PageID>();
+            free_pages.clear();
+            for (int i = 0; i <= std::numeric_limits<PageState>::max(); i++) {
+                free_pages.push_back(std::list<PageID>());
                 free_pages[i].clear();
             }
             page_states.clear();

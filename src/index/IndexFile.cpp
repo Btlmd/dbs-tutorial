@@ -177,9 +177,6 @@ void IndexFile::InsertRecord(PageID page_id, SlotID slot_id, const std::shared_p
         // Recursively search the parent page
         curr_page_id = Page(curr_page_id)->ParentPage();
     }
-
-    Print();  // TODO
-
 }
 
 

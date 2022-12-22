@@ -413,10 +413,11 @@ std::shared_ptr<DataPage> DBSystem::FindPageWithSpace(TableID table_id, RecordSi
 //        meta->fsm.AddPage(meta->data_page_count);
 //        ++meta->data_page_count;
 //        return data_page;
-
+        PageID page_id = meta->data_page_count;
         auto page{buffer.CreatePage(data_fd, meta->data_page_count++)};
         auto data_page{std::make_shared<DataPage>(page, *meta)};
         data_page->Init();
+        meta->fsm.UpdateFreeSpace(page_id, data_page->header.free_space);
         return data_page;
 
     } else {
@@ -667,6 +668,11 @@ DBSystem::Update(TableID table_id, const std::vector<std::pair<std::shared_ptr<F
                     InsertRecord(table_id, updated_record); // index inserted through this function
                 } else {  // in-place update
                     dp.Update(j, updated_record);
+
+                    // update fsm
+                    auto meta{meta_map[table_id]};
+                    meta->fsm.UpdateFreeSpace(dp.page->id, dp.header.free_space);
+
                     UpdateInPlaceRecordIndex(affected, table_id, page->id, j, record, updated_record);
                 }
             }
@@ -679,6 +685,11 @@ DBSystem::Update(TableID table_id, const std::vector<std::pair<std::shared_ptr<F
 void DBSystem::InsertRecord(TableID table_id, const std::shared_ptr<Record> &record) {
     auto page{FindPageWithSpace(table_id, record->Size())};
     auto slot_id{page->Insert(record)};
+
+    // Update fsm free space
+    auto meta{meta_map[table_id]};
+    meta->fsm.UpdateFreeSpace(page->page->id, page->header.free_space);
+
     InsertRecordIndex(table_id, page->page->id, slot_id, record);
 }
 
