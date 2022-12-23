@@ -68,7 +68,7 @@ ResultList ToResultList(const std::string &in_string, DBVisitor &visitor) {
 }
 
 
-void inline process_input(const std::string &in_string, DBVisitor &visitor) {
+void inline process_input(const std::string &in_string, DBVisitor &visitor, bool beep = false) {
     try {
         auto result_list{ToResultList(in_string, visitor)};
         for (auto &result_ptr: result_list) {
@@ -76,6 +76,9 @@ void inline process_input(const std::string &in_string, DBVisitor &visitor) {
             std::cout.flush();
         }
     } catch (const OperationError &e) {
+        if (beep) {
+            std::cout << '\a';
+        }
         std::cout << e.what() << std::endl;
     }
 }

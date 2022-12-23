@@ -19,16 +19,9 @@ int main() {
         }
 
         Terminal term{false, true, false, false};
-        std::cout << "Interactive prompt." << std::endl;
-        std::cout << "  * Use Ctrl-D to exit." << std::endl;
-        std::cout << "  * Use Enter to submit." << std::endl;
-        std::cout << "  * Features:" << std::endl;
-        std::cout << "    - Editing (Keys: Left, Right, Home, End, Backspace)"
-                  << std::endl;
-        std::cout << "    - History (Keys: Up, Down)" << std::endl;
-        std::cout
-                << "    - Multi-line editing"
-                << std::endl;
+        std::cout << "[dbs-tutorial] project by lambda & c7w" << std::endl;
+        std::cout << "Usage: Enter to submit, Ctrl-D to exit" << std::endl;
+        std::cout << "       Multi-line editing and history are supported" << std::endl;
 
         std::vector<std::string> history;
         std::function<bool(std::string)> iscomplete = [](const std::string& input_seq) -> bool {
@@ -42,7 +35,7 @@ int main() {
                 std::cout << "Bye :)" << std::endl;
                 break;
             }
-            process_input(answer, visitor);
+            process_input(answer, visitor, true);
         }
     } catch (const std::exception &e) {
         std::cerr << "Unexpected error: " << e.what() << std::endl;

@@ -424,6 +424,9 @@ private:
      * @return
      */
     std::optional<std::shared_ptr<Record>> CheckRecordsUnique(TableID table_id, const std::vector<FieldID> &fields);
+
+    std::optional<std::shared_ptr<Record>> CheckRecordsSatisfyAllUnique(TableID table_id, const RecordList &records);
+
 };
 
 #endif //DBS_TUTORIAL_DBSYSTEM_H

@@ -731,7 +731,9 @@ std::shared_ptr<Result> DBSystem::Select(const std::vector<std::string> &header,
 }
 
 std::shared_ptr<Result> DBSystem::Insert(TableID table_id, RecordList &records) {
+    auto &table_meta{meta_map[table_id]};
     for (const auto &record: records) {
+        CheckConstraintInsert(*table_meta, record);
         InsertRecord(table_id, record);
     }
     return std::make_shared<TextResult>(fmt::format("{} record(s) inserted", records.size()));
