@@ -127,24 +127,78 @@ public:
     }
 
     std::shared_ptr<IndexPage> Page(PageID page_id) {
-        auto page = buffer.ReadPage(fd, page_id);
-        return std::make_shared<IndexPage>(page, *meta);
+        // First decide if page_cache is too large
+        if (page_cache.size() > 10) {
+            Release();
+        }
+
+        // First find in page_cache
+        if (page_cache.find(page_id) != page_cache.end()) {
+            return page_cache[page_id];
+        } else {
+            auto page = buffer.ReadPage(fd, page_id);
+            page->Lock();
+            auto index_page = std::make_shared<IndexPage>(page, *meta);
+            page_cache[page_id] = index_page;
+            return index_page;
+        }
+    }
+
+    void Release() {
+        for (auto &item: page_cache) {
+            item.second->page->Release();
+        }
+        page_cache.clear();
     }
 
 private:
+    std::unordered_map<PageID, std::shared_ptr<IndexPage>> page_cache;
     BufferSystem &buffer;
     FileID fd{};
 
     // Find k that curr_page is the k-th child of parent_page
     TreeOrder Find(PageID parent_page_id, PageID curr_page_id) {
+
+        // First get key from curr_page_id
+        auto key = Page(curr_page_id)->Select(Page(curr_page_id)->ChildCount()-1)->key;
+
+        // Then find the key in parent_page_id
+        auto find_pos = Find(parent_page_id, key);
+
         auto child_cnt = Page(parent_page_id)->ChildCount();
-        for (TreeOrder i = 0; i < child_cnt; ++i) {
+        for (TreeOrder i = find_pos; i < child_cnt; ++i) {
             auto entry = Page(parent_page_id)->Select(i);
             if (entry->page_id == Page(curr_page_id)->page->id) {
                 return i;
             }
+            if (*entry->key > *key) {
+                break;
+            }
         }
         return -1;
+    }
+
+    // Use binary search to find the first children of Page(page_id) that is greater than or equal to key
+    // Return the last child if key is greater than all children
+    TreeOrder Find(PageID page_id, const std::shared_ptr<IndexField>& key) {
+        auto child_cnt = Page(page_id)->ChildCount();
+        TreeOrder ret_candidate = child_cnt - 1;
+
+        TreeOrder l = 0, r = child_cnt - 1;  // [l, r]
+        while (l <= r) {  // Use binary search to find the first children of Page(page_id) that is greater than or equal to key
+            TreeOrder mid = (l + r) / 2;
+            auto mid_entry = Page(page_id)->Select(mid);
+            auto entry_key = Page(page_id)->CastRecord(mid_entry)->key;
+
+            if (*entry_key < *key) {
+                l = mid + 1;
+            } else {
+                r = mid - 1;
+                ret_candidate = mid;
+            }
+        }
+        assert (0 <= ret_candidate && ret_candidate < child_cnt);
+        return ret_candidate;
     }
 
     // Split the page into two pages

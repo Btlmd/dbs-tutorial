@@ -15,32 +15,34 @@ std::pair<PageID, TreeOrder> IndexFile::SelectRecord(const std::shared_ptr<Index
     PageID curr_page_id = root_page_id;
     while (!Page(curr_page_id)->IsLeaf()) {
         // Find the first child that is greater than or equal to key
-        auto child_cnt = Page(curr_page_id)->ChildCount();
-        auto curr_page_id_candidate = Page(curr_page_id)->Select(Page(curr_page_id)->ChildCount() - 1)->page_id;
-        for (TreeOrder i = 0; i < child_cnt; ++i) {
-            auto entry = Page(curr_page_id)->Select(i);
-            auto entry_key = Page(curr_page_id)->CastRecord(entry)->key;
-            if (*entry_key >= *key) {
-                curr_page_id_candidate = entry->page_id;
-                break;
-            }
-        }
-        curr_page_id = curr_page_id_candidate;
+        auto find_pos = Find(curr_page_id, key);
+//        auto child_cnt = Page(curr_page_id)->ChildCount();
+//        auto curr_page_id_candidate = Page(curr_page_id)->Select(Page(curr_page_id)->ChildCount() - 1)->page_id;
+//        for (TreeOrder i = 0; i < child_cnt; ++i) {
+//            auto entry = Page(curr_page_id)->Select(i);
+//            auto entry_key = Page(curr_page_id)->CastRecord(entry)->key;
+//            if (*entry_key >= *key) {
+//                curr_page_id_candidate = entry->page_id;
+//                break;
+//            }
+//        }
+        curr_page_id = Page(curr_page_id)->Select(find_pos)->page_id;
     }
     ret.first = curr_page_id;
 
     // Now we find the leaf page, then we find the first record that is greater than or equal to key
-    auto record_cnt = Page(curr_page_id)->ChildCount();
-    auto insert_slot_id_candidate = Page(curr_page_id)->ChildCount() - 1;  // For joint searching, it is possible that the record is not found
-                                           // as we only consider the first key
-    for (TreeOrder i = 0; i < record_cnt; ++i) {
-        auto entry = Page(curr_page_id)->Select(i);
-        if (*(entry->key) >= *key) {
-            insert_slot_id_candidate = i;
-            break;
-        }
-    }
-    auto insert_slot_id = insert_slot_id_candidate;
+//    auto record_cnt = Page(curr_page_id)->ChildCount();
+//    auto insert_slot_id_candidate = Page(curr_page_id)->ChildCount() - 1;  // For joint searching, it is possible that the record is not found
+//                                           // as we only consider the first key
+//    for (TreeOrder i = 0; i < record_cnt; ++i) {
+//        auto entry = Page(curr_page_id)->Select(i);
+//        if (*(entry->key) >= *key) {
+//            insert_slot_id_candidate = i;
+//            break;
+//        }
+//    }
+//    auto insert_slot_id = insert_slot_id_candidate;
+    auto insert_slot_id = Find(curr_page_id, key);
 
     // Then we follow the bottom link table to find the first record that is greater than or equal to key
     while (*(Page(curr_page_id)->Select(insert_slot_id)->key) < *key) {
