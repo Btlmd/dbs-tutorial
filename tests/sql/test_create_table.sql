@@ -24,7 +24,7 @@ CREATE TABLE T
     JJJ   VARCHAR(10),
     KKKK  FLOAT NOT NULL,
     LLLLL CHAR(15),
-    PRIMARY KEY PK_NAME (LLLLL, H, D, A),
+    PRIMARY KEY PK_NAME (II, E, A),
     FOREIGN KEY fk_1 (A, E, II) REFERENCES a_table_name (a, d, e),
     FOREIGN KEY fk_2 (A, E, II) REFERENCES a_table_name (a, d, e),
     FOREIGN KEY fk_3 (A, E, II) REFERENCES a_table_name (a, d, e),

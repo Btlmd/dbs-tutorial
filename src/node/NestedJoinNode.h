@@ -2,20 +2,20 @@
 // Created by lambda on 22-11-26.
 //
 
-#ifndef DBS_TUTORIAL_JOINNODE_H
-#define DBS_TUTORIAL_JOINNODE_H
+#ifndef DBS_TUTORIAL_NESTEDJOINNODE_H
+#define DBS_TUTORIAL_NESTEDJOINNODE_H
 
 #include <node/OpNode.h>
 #include <system/WhereConditions.h>
 #include <fmt/format.h>
 
-class JoinNode : public OpNode {
+class NestedJoinNode : public OpNode {
 public:
     std::shared_ptr<JoinCondition> cond;
     RecordList rhs_records;
     bool uncalled;
 
-    JoinNode(std::shared_ptr<OpNode> lhs, std::shared_ptr<OpNode> rhs, std::shared_ptr<JoinCondition> cond) :
+    NestedJoinNode(std::shared_ptr<OpNode> lhs, std::shared_ptr<OpNode> rhs, std::shared_ptr<JoinCondition> cond) :
             OpNode{{std::move(lhs), std::move(rhs)}}, cond{std::move(cond)}, uncalled{true} {}
 
     [[nodiscard]] bool Over() const override {
@@ -59,4 +59,4 @@ public:
 };
 
 
-#endif //DBS_TUTORIAL_JOINNODE_H
+#endif //DBS_TUTORIAL_NESTEDJOINNODE_H

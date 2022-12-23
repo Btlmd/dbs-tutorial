@@ -11,7 +11,8 @@
 #include <system/Column.h>
 #include <node/OpNode.h>
 #include <node/ScanNode.h>
-#include <node/JoinNode.h>
+#include <node/NestedJoinNode.h>
+#include <node/HashJoinNode.h>
 #include <node/ProjectNode.h>
 #include <node/AggregateNode.h>
 #include <node/OffsetLimitNode.h>
@@ -292,7 +293,21 @@ antlrcpp::Any DBVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) 
                 }
             }
             auto join_cond{JoinCondition::Merge(join_conds_i, JoinPair{-1, selected_tables[i]})};
-            join_root = std::make_shared<JoinNode>(join_root, table_scanners[selected_tables[i]], join_cond);
+            // try construct hash join node
+            auto it{std::find_if(join_cond->conditions.begin(), join_cond->conditions.end(),
+                                 [](const JoinCond &jc) -> bool {
+                                     return std::dynamic_pointer_cast<EqCmp>(std::get<2>(jc)) != nullptr;
+                                 })};
+            if (it != join_cond->conditions.end()) {  // use EqCmp to construct hash join
+                auto hash_cond{std::make_shared<JoinCondition>(std::vector{*it}, join_cond->tables)};
+                join_cond->conditions.erase(it);
+                if (join_cond->conditions.empty()) {
+                    join_cond = nullptr;
+                }
+                join_root = std::make_shared<HashJoinNode>(join_root, table_scanners[selected_tables[i]], hash_cond, join_cond);
+            } else {  // does not exist EqCmp, use nested loop join
+                join_root = std::make_shared<NestedJoinNode>(join_root, table_scanners[selected_tables[i]], join_cond);
+            }
         }
         root = join_root;
     } else {  // connect scan node directly
@@ -527,9 +542,10 @@ DBVisitor::GetValue(SQLParser::ValueContext *ctx, const std::shared_ptr<FieldMet
                 throw OperationError{"Data too long for column `{}`", selected_field->name,};
             }
             return std::make_shared<VarChar>(str_val);
-        } if (selected_field->type == FieldType::DATE) {
+        }
+        if (selected_field->type == FieldType::DATE) {
             return std::make_shared<Date>(str_val);
-        }else {
+        } else {
             auto type_name{magic_enum::enum_name(selected_field->type)};
             throw OperationError{
                     "Incompatible type; Expecting {} for column {}, got STRING instead",
@@ -769,4 +785,61 @@ antlrcpp::Any DBVisitor::visitAlter_drop_index(SQLParser::Alter_drop_indexContex
 
 antlrcpp::Any DBVisitor::visitShow_tables(SQLParser::Show_tablesContext *ctx) {
     return system.ShowTables();
+}
+
+antlrcpp::Any DBVisitor::visitAlter_table_drop_pk(SQLParser::Alter_table_drop_pkContext *ctx) {
+    std::string pk_name;
+    if (ctx->Identifier().size() == 2) {
+        pk_name = ctx->Identifier(1)->getText();
+    }
+    auto table_name{ctx->Identifier(0)->getText()};
+    return system.DropPrimaryKey(table_name, pk_name);
+}
+
+antlrcpp::Any DBVisitor::visitAlter_table_drop_foreign_key(SQLParser::Alter_table_drop_foreign_keyContext *ctx) {
+    auto table_name{ctx->Identifier(0)->getText()};
+    auto fk_name{ctx->Identifier(1)->getText()};
+    return system.DropForeignKey(table_name, fk_name);
+}
+
+antlrcpp::Any DBVisitor::visitAlter_table_add_pk(SQLParser::Alter_table_add_pkContext *ctx) {
+    auto table_name{ctx->Identifier(0)->getText()};
+    std::string pk_name;
+    if (ctx->Identifier().size() == 2) {
+        pk_name = ctx->Identifier(1)->getText();
+    }
+
+    std::vector<std::string> pk_fields;
+    for (auto field: ctx->identifiers()->Identifier()) {
+        pk_fields.push_back(field->getText());
+    }
+
+    return system.AddPrimaryKey(table_name, {pk_name, std::move(pk_fields)});
+}
+
+antlrcpp::Any DBVisitor::visitAlter_table_add_foreign_key(SQLParser::Alter_table_add_foreign_keyContext *ctx) {
+    auto table_name{ctx->Identifier(0)->getText()};
+    auto fk_name{ctx->Identifier(1)->getText()};
+    auto ref_name{ctx->Identifier(2)->getText()};
+
+    std::vector<std::string> ch_fields;
+    for (auto field: ctx->identifiers(0)->Identifier()) {
+        ch_fields.push_back(field->getText());
+    }
+    std::vector<std::string> ref_fields;
+    for (auto field: ctx->identifiers(1)->Identifier()) {
+        ref_fields.push_back(field->getText());
+    }
+
+    return system.AddForeignKey(table_name, {fk_name, ref_name, std::move(ch_fields), std::move(ref_fields)});
+}
+
+antlrcpp::Any DBVisitor::visitAlter_table_add_unique(SQLParser::Alter_table_add_uniqueContext *ctx) {
+    auto table_name{ctx->Identifier()->getText()};
+    std::vector<std::string> uk_fields;
+    for (auto field: ctx->identifiers()->Identifier()) {
+        uk_fields.push_back(field->getText());
+    }
+
+    return system.AddUnique(table_name, uk_fields);
 }

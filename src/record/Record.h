@@ -108,7 +108,7 @@ public:
         for (const auto &pos: target) {
             fields_new.push_back(fields[pos]);
         }
-        return std::move(fields);
+        return std::move(fields_new);
     }
 
     bool operator == (const Record& rhs) const {
@@ -132,16 +132,17 @@ public:
 
     bool operator()(const std::shared_ptr<Record> &lhs, const std::shared_ptr<Record> &rhs) {
         for (const auto i: fields) {
-            if (lhs->fields[i]->is_null && rhs->fields[i]->is_null) {
+            if (lhs->fields[i]->is_null && rhs->fields[i]->is_null) {  // both null
                 continue;
             }
-            if (!lhs->fields[i]->is_null && !rhs->fields[i]->is_null) {
-                if (lhs->fields[i] == rhs->fields[i]) {
+            if (!lhs->fields[i]->is_null && !rhs->fields[i]->is_null) {  // both not null
+                if (*lhs->fields[i] == *rhs->fields[i]) {
                     continue;
                 } else {
                     return false;
                 }
             }
+            return false;  // one null, the other not null
         }
         return true;
     }

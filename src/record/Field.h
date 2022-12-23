@@ -32,11 +32,11 @@ public:
     FieldID fields[MAX_FIELD_COUNT];
 
     [[nodiscard]] std::vector<FieldID> to_vector() const {
-        std::vector<FieldID> fields;
+        std::vector<FieldID> field_vec;
         for (FieldID i{0}; i < field_count; ++i) {
-            fields.push_back(fields[i]);
+            field_vec.push_back(fields[i]);
         }
-        return std::move(fields);
+        return std::move(field_vec);
     }
 };
 
@@ -48,35 +48,35 @@ public:
     TableID reference_table;
     FieldID reference_fields[MAX_FIELD_COUNT];
 
-    [[nodiscard]] std::vector<FieldID> to_vector() const {
-        std::vector<FieldID> fields;
+    [[nodiscard]] std::vector<FieldID> ToVector() const {
+        std::vector<FieldID> vec;
         for (FieldID i{0}; i < field_count; ++i) {
-            fields.push_back(fields[i]);
+            vec.push_back(fields[i]);
         }
-        return std::move(fields);
+        return std::move(vec);
     }
 
-    [[nodiscard]] std::vector<FieldID> reference_to_vector() const {
-        std::vector<FieldID> fields;
+    [[nodiscard]] std::vector<FieldID> ReferenceToVector() const {
+        std::vector<FieldID> vec;
         for (FieldID i{0}; i < field_count; ++i) {
-            fields.push_back(reference_fields[i]);
+            vec.push_back(reference_fields[i]);
         }
-        return std::move(fields);
+        return std::move(vec);
     }
 };
 
 class UniqueKey {
 public:
-    char name[CONSTRAINT_NAME_LEN_MAX + 1];
+//    char name[CONSTRAINT_NAME_LEN_MAX + 1];
     FieldID field_count;
     FieldID fields[MAX_FIELD_COUNT];
 
-    [[nodiscard]] std::vector<FieldID> to_vector() const {
-        std::vector<FieldID> fields;
+    [[nodiscard]] std::vector<FieldID> ToVector() const {
+        std::vector<FieldID> vec;
         for (FieldID i{0}; i < field_count; ++i) {
-            fields.push_back(fields[i]);
+            vec.push_back(fields[i]);
         }
-        return std::move(fields);
+        return std::move(vec);
     }
 };
 

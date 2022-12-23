@@ -27,6 +27,7 @@ public:
 
 
     RecordList Next() override {
+        called = true;
         RecordList records{children[0]->All()};
 
         FieldCompare comp;

@@ -37,19 +37,36 @@ std::string TableResult::ToString() {
     } else {
         // create table
         table = std::make_shared<tabulate::Table>();
-        table->add_row(ToRow(headers));
-        for (auto &record: records) {
-            table->add_row(ToRow(record));
-        }
 
-        // table format
-        auto record_len{records.size()};
-        if (record_len > 1) {  // range [1, record_len]
-            table->row(1).format().border_bottom("").corner_bottom_left("").corner_bottom_right("");
-            for (int i{2}; i < record_len; ++i) {
-                table->row(i).format().border_top("").border_bottom("").corner("");
+        if (headers.empty()) {
+            for (auto &record: records) {
+                table->add_row(ToRow(record));
             }
-            table->row(record_len).format().border_top("").corner_top_left("").corner_top_right("");
+
+            // table format
+            auto record_len{records.size()};
+            if (record_len > 1) {  // range [0, record_len - 1]
+                table->row(0).format().border_bottom("").corner_bottom_left("").corner_bottom_right("");
+                for (int i{1}; i < record_len - 1; ++i) {
+                    table->row(i).format().border_top("").border_bottom("").corner("");
+                }
+                table->row(record_len - 1).format().border_top("").corner_top_left("").corner_top_right("");
+            }
+        } else {
+            table->add_row(ToRow(headers));
+            for (auto &record: records) {
+                table->add_row(ToRow(record));
+            }
+
+            // table format
+            auto record_len{records.size()};
+            if (record_len > 1) {  // range [1, record_len]
+                table->row(1).format().border_bottom("").corner_bottom_left("").corner_bottom_right("");
+                for (int i{2}; i < record_len; ++i) {
+                    table->row(i).format().border_top("").border_bottom("").corner("");
+                }
+                table->row(record_len).format().border_top("").corner_top_left("").corner_top_right("");
+            }
         }
 
         output = table->str();

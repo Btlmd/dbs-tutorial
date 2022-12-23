@@ -51,11 +51,11 @@ public:
 
     std::shared_ptr<Result> AddPrimaryKey(const std::string &table_name, const RawPrimaryKey &raw_pk);
 
-    std::shared_ptr<Result> AddUnique(const std::string &table_name, std::string& name, const std::vector<std::string> &fields);
+    std::shared_ptr<Result> AddUnique(const std::string &table_name, const std::vector<std::string> &fields);
 
     std::shared_ptr<Result> DropForeignKey(const std::string &table_name, const std::string &fk_name);
 
-    std::shared_ptr<Result> DropPrimaryKey(const std::string &table_name);
+    std::shared_ptr<Result> DropPrimaryKey(const std::string &table_name, const std::string &pk_name);
 
     std::shared_ptr<Result> AddIndex(const std::string &table_name, const std::vector<std::string> &field_name);
 
@@ -197,7 +197,7 @@ private:
      * @param table_id
      * @param raw_fk
      */
-    void AddForeignKey(std::shared_ptr<TableMeta> &meta, const RawForeignKey &raw_fk);
+    void AddForeignKey(std::shared_ptr<TableMeta> &meta, const RawForeignKey &raw_fk, bool constraint_check = true);
 
     /**
      * Add primary key to `table_id`
@@ -205,9 +205,9 @@ private:
      * @param table_id
      * @param raw_pk
      */
-    void AddPrimaryKey(std::shared_ptr<TableMeta> &meta, const RawPrimaryKey &raw_pk);
+    void AddPrimaryKey(std::shared_ptr<TableMeta> &meta, const RawPrimaryKey &raw_pk, bool constraint_check = true);
 
-    void AddUnique(std::shared_ptr<TableMeta> &meta, std::string& name, const std::vector<std::string> &fields);
+    void AddUnique(std::shared_ptr<TableMeta> &meta, const std::vector<std::string> &fields);
 
     /**
      *
@@ -351,7 +351,7 @@ private:
     );
 
     /**
-     *
+     * Get the num of records in `table_id` which match in `fields` with values `field_values`
      * @param table_id
      * @param fields
      * @param field_vals
@@ -359,8 +359,20 @@ private:
      */
     std::size_t TupleExists(TableID table_id, const std::vector<FieldID> &fields, const std::vector<std::shared_ptr<Field>>& field_vals);
 
+    /**
+     * Get the all tables that refer to `table_id`
+     * @param table_id
+     * @return
+     */
     std::vector<std::pair<TableID, std::shared_ptr<ForeignKey>>> GetParentTables(TableID table_id);
 
+    /**
+     * Truncate fields and call `AddIndex`
+     * @tparam lim
+     * @param table_id
+     * @param field_ids
+     * @param is_user
+     */
     template<FieldID lim>
     void AddIndexLimited(TableID table_id, const std::vector<FieldID> &field_ids, bool is_user) {
         std::vector<FieldID> index_fields;
@@ -370,6 +382,13 @@ private:
         AddIndex(table_id, index_fields, is_user);
     }
 
+    /**
+     * Truncate fields and call `DropIndex`
+     * @tparam lim
+     * @param table_id
+     * @param field_ids
+     * @param is_user
+     */
     template<FieldID lim>
     void DropIndexLimited(TableID table_id, const std::vector<FieldID> &field_ids, bool is_user) {
         std::vector<FieldID> index_fields;
@@ -379,10 +398,31 @@ private:
         DropIndex(table_id, index_fields, is_user);
     }
 
+    /**
+     * Drop specified foreign key
+     * @param table_id
+     * @param fk_name
+     */
     void DropForeignKey(TableID table_id, const std::string &fk_name);
 
+    /**
+     * Drop primary key
+     * @param table_id
+     */
     void DropPrimaryKey(TableID table_id);
 
+    /**
+     * Drop specified table
+     * @param table_id
+     */
+    void DropTable(TableID table_id);
+
+    /**
+     * Check if `fields` are composite unique; treat NULL like a normal value
+     * @param table_id
+     * @param fields
+     * @return
+     */
     std::optional<std::shared_ptr<Record>> CheckRecordsUnique(TableID table_id, const std::vector<FieldID> &fields);
 };
 
