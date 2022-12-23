@@ -15,6 +15,8 @@ if __name__ == "__main__":
     );
     
     {}    
+    
+    ALTER TABLE info ADD INDEX (C5);
     """
 
     insert_sql = ""

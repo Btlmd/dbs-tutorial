@@ -12,7 +12,7 @@
 
 struct BufferHash {
     std::size_t operator()(const std::pair<FileID, PageID> &id_pair) const {
-        return id_pair.first ^ id_pair.second;
+        return (id_pair.first << 16) ^ static_cast<uint32_t>(id_pair.second);
     }
 };
 

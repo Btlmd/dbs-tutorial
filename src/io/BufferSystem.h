@@ -112,10 +112,10 @@ private:
     FilePageMap buffer_map_fd_;
 
     // from (fd, page_id) pair to the buffer page
-    std::map<std::pair<FileID, PageID>, Page *> buffer_map_;
+    std::unordered_map<std::pair<FileID, PageID>, Page *, BufferHash> buffer_map_;
 
     // from buffer page to its position in usage record list
-    std::map<Page *, std::list<Page *>::iterator> visit_record_map_;
+    std::unordered_map<Page *, std::list<Page *>::iterator> visit_record_map_;
 
     // list free pages
     std::list<Page *> free_record_;

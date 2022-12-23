@@ -48,8 +48,9 @@ BufferSystem::~BufferSystem() {
 
 void BufferSystem::Access(Page *page) {
     Trace("Access" << page->Seq());
-    assert(visit_record_map_.find(page) != visit_record_map_.end());
-    auto it{visit_record_map_[page]};
+    auto vrm_it{visit_record_map_.find(page)};
+    assert(vrm_it != visit_record_map_.end());
+    auto it{vrm_it->second};
     if (it != visit_record_.begin()) {
         auto head{visit_record_.begin()};
         std::advance(head, Page::lock_count);
