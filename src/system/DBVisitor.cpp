@@ -38,7 +38,7 @@ antlrcpp::Any DBVisitor::visitProgram(SQLParser::ProgramContext *ctx) {
     for (auto &child: ctx->children) {
         auto stmt_ctx{dynamic_cast<SQLParser::StatementContext *>(child)};
         if (stmt_ctx && !stmt_ctx->Annotation() && !stmt_ctx->Null()) {
-            DebugLog << "Process query: " << child->getText();
+//            DebugLog << "Process query: " << child->getText();
             auto begin{std::chrono::high_resolution_clock::now()};
             antlrcpp::Any result{child->accept(this)};
             std::chrono::duration<double> elapse{std::chrono::high_resolution_clock::now() - begin};
@@ -225,9 +225,9 @@ antlrcpp::Any DBVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) 
         selected_tables.push_back(table_id);  // `selected_tables` follows the original order of user input
     }
 
-    DebugLog << "Selected tables" << boost::algorithm::join(
-                selected_tables | boost::adaptors::transformed(static_cast<std::string(*)(TableID)>(std::to_string)),
-                ", ");
+//    DebugLog << "Selected tables" << boost::algorithm::join(
+//                selected_tables | boost::adaptors::transformed(static_cast<std::string(*)(TableID)>(std::to_string)),
+//                ", ");
 
     std::multimap<TableID, std::shared_ptr<FilterCondition>> filters;
     std::multimap<JoinPair, std::shared_ptr<JoinCondition>> joins;

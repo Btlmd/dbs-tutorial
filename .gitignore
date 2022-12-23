@@ -10,6 +10,7 @@ databases
 src/grammar/*
 !src/grammar/SQL.g4
 tests/sql/gen_*.sql
+tests/sql/temp_*.sql
 
 # scratch file
 const_lut.h

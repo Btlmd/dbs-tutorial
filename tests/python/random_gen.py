@@ -1,12 +1,15 @@
 import random
 import os
+from tqdm import tqdm
 
 with open(os.path.join(os.path.dirname(__file__), "wordlist.txt"), "r") as f:
     word_list = f.read().split()
 
 random.seed(4022)
 
-def i():
+def i(*rg):
+    if len(rg) == 2:
+        return random.randint(*rg)
     return random.randint(0, 40)
 
 def f():
@@ -35,9 +38,12 @@ def to_record(fields):
 
 insert = "INSERT INTO %s VALUES %s;\n"
 
-def gen_insertions(template_func, name, count):
+def gen_insertions(template_func, name, count, show_tqdm=False):
     _sql = []
-    for j in range(count):
+    it = range(count)
+    if show_tqdm:
+        it = tqdm(it)
+    for j in it:
         _sql += [to_record([x() for x in template_func])]
     _sql = ", ".join(_sql)
     _sql = insert % (name, _sql)
