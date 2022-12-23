@@ -13,10 +13,66 @@
 #include <functional>
 
 #include <defines.h>
-#include <io/Page.h>
 #include <io/FileSystem.h>
 
-class FilePageMap: public std::unordered_map<FileID, std::unordered_set<Page *>> {
+struct BufferHash {
+    std::size_t operator()(const std::pair<FileID, PageID> &id_pair) const {
+        return (id_pair.first << 16) ^ static_cast<uint32_t>(id_pair.second);
+    }
+};
+
+class BufferSystem;
+
+class Page {
+public:
+    Page() = default;
+
+    void Init(PageID _seq_id, BufferSystem *_buffer) {
+        buffer = _buffer;
+        seq_id = _seq_id;
+        // to silence the `uninitialized` issue
+        memset(data, 0xff, PAGE_SIZE);
+    }
+
+    /**
+     * Mark Page as dirty
+     */
+    void SetDirty() {
+        dirty = true;
+    }
+
+    /**
+     * Make sure a page will not be swapped
+     * Note: since we lock it in list head, you must make sure that you lock the page immediately after `Access` it
+     */
+    void Lock();
+
+    /**
+     * Allow a page to be swapped
+     */
+    void Release();
+
+    /**
+     * return a formatted representation of the page
+     * for debug
+     * @return
+     */
+    [[nodiscard]] std::string Seq() const {
+        return " < @" + std::to_string(fd) + ", #" + std::to_string(id) + ", %" + std::to_string(seq_id) + " > ";
+    }
+
+    ~Page() = default;
+
+    uint8_t data[PAGE_SIZE];
+    bool dirty{false};
+    bool lock{false};
+    FileID fd{-1};
+    PageID id{-1};
+    PageID seq_id{-1};
+    BufferSystem *buffer{nullptr};
+};
+
+class FilePageMap : public std::unordered_map<FileID, std::unordered_set<Page *>> {
 public:
     void mark(FileID fd, Page *pos) {
         auto set_it{find(fd)};
@@ -40,7 +96,7 @@ public:
         }
     }
 
-    void apply(FileID fd, const std::function<void(Page *)>& func) const {
+    void apply(FileID fd, const std::function<void(Page *)> &func) const {
         auto set_it{find(fd)};
         if (set_it != end()) {
             for (auto it{set_it->second.begin()}; it != set_it->second.end(); ++it) {
@@ -120,10 +176,29 @@ private:
     // list free pages
     std::list<Page *> free_record_;
 
-    // list of all pages where nearer to tail, more recently used
+    // LRU records
     std::list<Page *> visit_record_;
 
+    friend Page;
 };
 
+inline void Page::Lock() {
+    // remove this page from visit_record_
+    auto visit_record_map_it{buffer->visit_record_map_.find(this)};
+    assert(!lock);
+    lock = true;
+    assert(visit_record_map_it != buffer->visit_record_map_.end());
+    buffer->visit_record_.erase(visit_record_map_it->second);
+    buffer->visit_record_map_.erase(visit_record_map_it);
+}
+
+inline void Page::Release() {
+    // put this page back to visit_record_
+    assert(lock);
+    lock = false;
+    assert(buffer->visit_record_map_.find(this) == buffer->visit_record_map_.end());
+    buffer->visit_record_.push_front(this);
+    buffer->visit_record_map_.insert({this, buffer->visit_record_.begin()});
+}
 
 #endif //DBS_TUTORIAL_BUFFERSYSTEM_H

@@ -5,7 +5,7 @@
 #include <utils/System.h>
 #include <system/DBVisitor.h>
 #include <system/DBSystem.h>
-#include <io/Page.h>
+#include <io/BufferSystem.h>
 #include <record/Field.h>
 #include <record/DataPage.h>
 #undef private

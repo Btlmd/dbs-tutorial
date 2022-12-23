@@ -84,7 +84,7 @@ target_link_libraries(connect_db main_shared ${Boost_LIBRARIES} ${PYTHON_LIBRARI
 enable_testing()
 
 # generate sql
-execute_process(COMMAND ${PROJECT_SOURCE_DIR}/utils/generate_sql_tests.sh )
+#execute_process(COMMAND ${PROJECT_SOURCE_DIR}/utils/generate_sql_tests.sh )
 
 file(COPY tests/python/compare.py DESTINATION ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
 

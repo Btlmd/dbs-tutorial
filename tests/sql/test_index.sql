@@ -1,0 +1,11 @@
+USE test_db2;
+
+ALTER TABLE info DROP INDEX (C1);
+
+SELECT * FROM info WHERE info.C1 > 1000 AND info.C1 < 1010;
+
+SELECT * FROM info WHERE info.C1 > 1000 AND info.C1 < 1010;
+
+ALTER TABLE info ADD INDEX (C1);
+
+SELECT * FROM info WHERE info.C1 > 1000 AND info.C1 < 1010;

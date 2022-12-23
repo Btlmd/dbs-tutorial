@@ -47,6 +47,7 @@ public:
 
     ~IndexFile() {
         Write();
+        Release();
     }
 
     void Write() {
@@ -133,10 +134,12 @@ public:
         }
 
         // First find in page_cache
-        if (page_cache.find(page_id) != page_cache.end()) {
-            return page_cache[page_id];
+        auto page_cache_it = page_cache.find(page_id);
+        if (page_cache_it != page_cache.end()) {
+            return page_cache_it->second;
         } else {
             auto page = buffer.ReadPage(fd, page_id);
+//            TraceLog << "Lock Page" << page->Seq();
             page->Lock();
             auto index_page = std::make_shared<IndexPage>(page, *meta);
             page_cache[page_id] = index_page;

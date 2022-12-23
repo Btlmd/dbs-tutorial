@@ -27,7 +27,7 @@ Page *BufferSystem::ReadPage(FileID fd, PageID page_id) {
 BufferSystem::BufferSystem() {
     buffer_ = new Page[BUFFER_SIZE];
     for (int i{0}; i < BUFFER_SIZE; ++i) {
-        buffer_[i].seq_id = i;
+        buffer_[i].Init(i, this);
         free_record_.push_back(&buffer_[i]);
         visit_record_.push_back(&buffer_[i]);
         visit_record_map_.insert({&buffer_[i], std::prev(visit_record_.end())});
@@ -49,12 +49,12 @@ BufferSystem::~BufferSystem() {
 void BufferSystem::Access(Page *page) {
     Trace("Access" << page->Seq());
     auto vrm_it{visit_record_map_.find(page)};
-    assert(vrm_it != visit_record_map_.end());
+    if(vrm_it == visit_record_map_.end()) {
+        return;  // so this page is locked
+    }
     auto it{vrm_it->second};
     if (it != visit_record_.begin()) {
-        auto head{visit_record_.begin()};
-        std::advance(head, Page::lock_count);
-        visit_record_.splice(head, visit_record_, it);
+        visit_record_.splice(visit_record_.begin(), visit_record_, it);
     }
 
 //    std::vector<std::string> table;
@@ -90,8 +90,7 @@ Page *BufferSystem::CreatePage(FileID fd, PageID page_id) {
 Page *BufferSystem::AllocPage(FileID fd, PageID page_id) {
     assert(buffer_map_.find({fd, page_id}) == buffer_map_.end());
     Page *pos;
-    if (buffer_map_.size() == BUFFER_SIZE) {
-        assert(free_record_.empty());
+    if (free_record_.empty()) {
         // buffer full
         pos = visit_record_.back();
         WriteBack(pos);
