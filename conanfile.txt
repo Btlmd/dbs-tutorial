@@ -5,6 +5,7 @@ fmt/9.1.0
 gtest/1.10.0
 magic_enum/0.8.1
 tabulate/1.4
+argparse/2.9
 
 [generators]
 cmake

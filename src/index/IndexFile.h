@@ -129,7 +129,7 @@ public:
 
     std::shared_ptr<IndexPage> Page(PageID page_id) {
         // First decide if page_cache is too large
-        if (page_cache.size() > 10) {
+        if (page_cache.size() >= INDEX_PAGE_BUFFER_SIZE) {
             Release();
         }
 

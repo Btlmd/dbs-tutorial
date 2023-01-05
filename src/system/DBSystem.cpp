@@ -320,25 +320,20 @@ std::shared_ptr<Result> DBSystem::AddPrimaryKey(const std::string &table_name, c
 }
 
 void DBSystem::AddForeignKey(std::shared_ptr<TableMeta> &meta, const RawForeignKey &raw_fk, bool constraint_check) {
-    auto &[fk_name, reference_table_name, fk_field_names, reference_field_names]{raw_fk};
+    auto [fk_name, reference_table_name, fk_field_names, reference_field_names]{raw_fk};
 
     auto dup_ele{CheckDuplicate(fk_field_names)};
     if (dup_ele.has_value()) {
         throw OperationError{"Duplicate column name `{}`", dup_ele.value()};
     }
-
-    auto fk{std::make_shared<ForeignKey>()};
-    if (fk_name.size() > CONSTRAINT_NAME_LEN_MAX) {
-        throw OperationError{"Identifier name `{}` is too long", fk_name};
-    }
-
     if (fk_field_names.size() != reference_field_names.size()) {
         throw OperationError{"Mismatch of reference table field count"};
     }
 
     auto reference_table_id{GetTableID(reference_table_name)};
     auto reference_meta{meta_map[reference_table_id]};
-    fk_name.copy(fk->name, fk_name.size(), 0);
+    auto fk{std::make_shared<ForeignKey>()};
+
     for (int i{0}; i < fk_field_names.size(); ++i) {
         auto table_fid{meta->field_meta.ToID<OperationError>(
                 fk_field_names[i],
@@ -356,6 +351,30 @@ void DBSystem::AddForeignKey(std::shared_ptr<TableMeta> &meta, const RawForeignK
     }
     fk->field_count = fk_field_names.size();
     fk->reference_table = reference_table_id;
+
+    // auto construct foreign key name if not appointed
+    if (fk_name.empty()) {
+        fk_name = "FK_";
+        for (int i{0}; i < fk->field_count; ++i) {
+            fk_name += fmt::format("{}_", fk->fields[i]);
+        }
+        fk_name += fmt::format("REF_{}_", reference_table_id);
+        for (int i{0}; i < fk->field_count; ++i) {
+            fk_name += fmt::format("{}_", fk->reference_fields[i]);
+        }
+    }
+
+    if (fk_name.size() > CONSTRAINT_NAME_LEN_MAX) {
+        throw OperationError{"Identifier name `{}` is too long", fk_name};
+    }
+
+    for (const auto& table_fk: meta->foreign_keys) {
+        if (table_fk->name == fk_name) {
+            throw OperationError{"Duplicate foreign key name `{}`", fk_name};
+        }
+    }
+
+    fk_name.copy(fk->name, fk_name.size(), 0);
 
     auto ch_fields{fk->ToVector()};
     auto ref_fields{fk->ReferenceToVector()};

@@ -55,12 +55,18 @@ target_link_libraries(main_shared ${LIBS})
 target_include_directories(main_shared PUBLIC src)
 
 # `front` target
-add_executable(front src/main.cpp)
+add_executable(front src/front.cpp)
 target_link_libraries(front main_shared)
 
 # `debug` target
 add_executable(debug src/debug.cpp)
 target_link_libraries(debug main_shared)
+
+# `convert` target
+file(GLOB_RECURSE antlr_source src/grammar/*.cpp)
+add_executable(convert src/convert.cpp ${antlr_source})
+target_link_libraries(convert ${LIBS})
+target_include_directories(convert PUBLIC src)
 
 add_executable(index_debug src/index_debug.cpp)
 target_link_libraries(index_debug main)

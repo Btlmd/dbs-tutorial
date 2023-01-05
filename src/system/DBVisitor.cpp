@@ -119,10 +119,14 @@ antlrcpp::Any DBVisitor::visitCreate_table(SQLParser::Create_tableContext *ctx) 
         auto fk{dynamic_cast<SQLParser::Foreign_key_fieldContext *>(field_ctx)};
         if (fk) {
             std::string fk_name;
-            if (fk->Identifier(0)) {
+            std::string reference_table_name;
+            if (fk->Identifier().size() == 1) {
+                fk_name = "";
+                reference_table_name = fk->Identifier(0)->getText();
+            } else {
                 fk_name = fk->Identifier(0)->getText();
+                reference_table_name = fk->Identifier(1)->getText();
             }
-            std::string reference_table_name{fk->Identifier(1)->getText()};
             std::vector<std::string> field_names;
             std::vector<std::string> reference_field_names;
             for (const auto &ident: fk->identifiers(0)->Identifier()) {

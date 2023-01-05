@@ -42,8 +42,9 @@ typedef std::tuple<std::string, std::vector<std::string>> RawPrimaryKey;
 
 // System Constants
 
-constexpr int32_t BUFFER_SIZE{60000};
 constexpr int32_t PAGE_SIZE{4096};
+constexpr int32_t BUFFER_SIZE{1024 * 1024 * 1024 / PAGE_SIZE};
+constexpr int32_t INDEX_PAGE_BUFFER_SIZE{64};
 
 
 // Max Length

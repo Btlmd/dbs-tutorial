@@ -126,7 +126,7 @@ public:
     }
 
     std::pair<int, std::pair<std::shared_ptr<class IndexField>, std::shared_ptr<class IndexField>>>
-        FilterCondition(const std::shared_ptr<class AndCondition>& and_cond);
+    FilterCondition(const std::shared_ptr<class AndCondition> &and_cond);
 };
 
 class Field {

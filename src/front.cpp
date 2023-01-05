@@ -8,6 +8,11 @@
 #include <system/DBVisitor.h>
 #include <exception/OperationException.h>
 
+using Term::Key;
+using Term::prompt_multiline;
+using Term::Terminal;
+
+
 int main() {
     init_logger();
 

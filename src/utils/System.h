@@ -17,6 +17,7 @@
 #include <cpp-terminal/input.hpp>
 #include <cpp-terminal/prompt.hpp>
 #include <fmt/chrono.h>
+#include <fmt/core.h>
 
 #include <boost/log/core.hpp>
 #include <boost/core/null_deleter.hpp>
@@ -44,20 +45,18 @@
 #include <system/DBVisitor.h>
 #include <exception/OperationException.h>
 
-namespace logging = boost::log;
-namespace expr = boost::log::expressions;
-namespace sinks = boost::log::sinks;
-using Term::Key;
-using Term::prompt_multiline;
-using Term::Terminal;
-
-ResultList ToResultList(const std::string &in_string, DBVisitor &visitor) {
+ResultList ToResultList(const std::string &in_string, DBVisitor &visitor, bool parsing_time = false) {
+    auto begin{std::chrono::high_resolution_clock::now()};
     antlr4::ANTLRInputStream input{in_string};
     SQLLexer lexer{&input};
-    antlr4::CommonTokenStream tokens(&lexer);
+    antlr4::CommonTokenStream tokens{&lexer};
     tokens.fill();
     SQLParser parser{&tokens};
     antlr4::tree::ParseTree *tree{parser.program()};
+    std::chrono::duration<double> elapse{std::chrono::high_resolution_clock::now() - begin};
+    if (parsing_time) {
+        fmt::print("parsing takes {:.2f} sec\n", elapse.count());
+    }
     if (parser.getNumberOfSyntaxErrors() > 0) {
         throw OperationError{"Syntax Error"};
     }
@@ -70,7 +69,7 @@ ResultList ToResultList(const std::string &in_string, DBVisitor &visitor) {
 
 void inline process_input(const std::string &in_string, DBVisitor &visitor, bool beep = false) {
     try {
-        auto result_list{ToResultList(in_string, visitor)};
+        auto result_list{ToResultList(in_string, visitor, true)};
         for (auto &result_ptr: result_list) {
             std::cout << result_ptr->Display() << std::endl;
             std::cout.flush();
@@ -84,6 +83,10 @@ void inline process_input(const std::string &in_string, DBVisitor &visitor, bool
 }
 
 void inline init_logger(boost::log::trivial::severity_level level=SEVERITY) {
+    namespace logging = boost::log;
+    namespace expr = boost::log::expressions;
+    namespace sinks = boost::log::sinks;
+
     boost::shared_ptr<logging::core> core = logging::core::get();
     typedef sinks::synchronous_sink<sinks::text_ostream_backend> sink_t;
 
