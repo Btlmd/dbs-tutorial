@@ -117,7 +117,7 @@ std::shared_ptr<Result> DBSystem::UseDatabase(const std::string &db_name) {
     }
 
     current_database = db_name;
-    return std::shared_ptr<Result>{new TextResult{"Database changed"}};
+    return std::make_shared<TextResult>(fmt::format("Database changed; Current database is `{}`", current_database));
 }
 
 std::shared_ptr<Result> DBSystem::DropDatabase(const std::string &db_name) {
@@ -125,14 +125,18 @@ std::shared_ptr<Result> DBSystem::DropDatabase(const std::string &db_name) {
         throw OperationError{"Can't drop database '{}'; database doesn't exist", db_name};
     }
 
+    std::string result_prompt;
     if (db_name == current_database) {
+        result_prompt = fmt::format("Database `{}` closed; Database dropped", current_database);
         CloseDatabase();
+    } else {
+        result_prompt = "Database dropped";
     }
 
     FileSystem::RemoveDirectory(DB_DIR / db_name);
     databases.erase(db_name);
 
-    return std::shared_ptr<Result>{new TextResult{"Database dropped"}};
+    return std::make_shared<TextResult>(result_prompt);
 }
 
 void DBSystem::CloseDatabase() {
@@ -368,7 +372,7 @@ void DBSystem::AddForeignKey(std::shared_ptr<TableMeta> &meta, const RawForeignK
         throw OperationError{"Identifier name `{}` is too long", fk_name};
     }
 
-    for (const auto& table_fk: meta->foreign_keys) {
+    for (const auto &table_fk: meta->foreign_keys) {
         if (table_fk->name == fk_name) {
             throw OperationError{"Duplicate foreign key name `{}`", fk_name};
         }
@@ -534,7 +538,14 @@ void DBSystem::CheckConstraintInsert(const TableMeta &meta, const std::shared_pt
     // check unique
     for (const auto &uk: meta.unique_keys) {
         auto target{uk->ToVector()};
-        auto ret{TupleExists(table_id, target, record->Project(target))};
+
+        // if any of the fields is NULL then the check is skipped
+        auto record_projected{record->Project(target)};
+        if (Record::HasNull(record_projected)) {
+            continue;
+        }
+
+        auto ret{TupleExists(table_id, target, record_projected)};
         if (ret) {
             throw OperationError{
                     "Unique key constraint failed; Duplicate entry in record {} ",
@@ -564,14 +575,18 @@ void DBSystem::CheckConstraintInsert(const TableMeta &meta, const std::shared_pt
 
     // check foreign key, tuple must exist in the reference table
     for (const auto &fk: meta.foreign_keys) {
-        for (int i{0}; i < fk->field_count; ++i) {
-            auto ret{TupleExists(fk->reference_table, fk->ReferenceToVector(), record->Project(fk->ToVector()))};
-            if (!ret) {
-                throw OperationError{
-                        "Foreign key constraint {} failed in record {} ",
-                        fk->name, record->Repr()
-                };
-            }
+        // if any of the fields is NULL then the check is skipped
+        auto record_projected{record->Project(fk->ToVector())};
+        if (Record::HasNull(record_projected)) {
+            continue;
+        }
+
+        auto ret{TupleExists(fk->reference_table, fk->ReferenceToVector(), record_projected)};
+        if (!ret) {
+            throw OperationError{
+                    "Foreign key constraint {} failed in record {} ",
+                    fk->name, record->Repr()
+            };
         }
     }
 }
@@ -594,14 +609,18 @@ void DBSystem::CheckConstraintDelete(const TableMeta &meta, const std::shared_pt
     }
 }
 
-void DBSystem::CheckConstraintUpdate(const TableMeta &meta, const std::shared_ptr<Record> &record_prev,
-                                     const std::shared_ptr<Record> &record_updated) {
+void DBSystem::CheckConstraintUpdate(
+        const TableMeta &meta,
+        const std::shared_ptr<Record> &record_prev,
+        const std::shared_ptr<Record> &record_updated,
+        const std::unordered_set<FieldID> &affected
+) {
     auto table_id{meta.table_id};
 
     // if some fields changed in an update, there fields are checked for delete
     // note that column being reference must be primary key, so exist implies exist only one record
 
-    // check foreign key, tuple must not exist in the parent table
+    // foreign key: as reference table, tuple must not exist in the parent table
     for (const auto &[parent_table_id, fk]: GetParentTables(table_id)) {
         auto changed{false};
         for (FieldID i{0}; i < fk->field_count; ++i) {
@@ -618,17 +637,98 @@ void DBSystem::CheckConstraintUpdate(const TableMeta &meta, const std::shared_pt
                         TupleExists(parent_table_id, fk->ToVector(), record_prev->Project(fk->ReferenceToVector()))};
                 if (ret) {
                     throw OperationError{
-                            "Foreign key constraint {} failed in update record {} to {}",
-                            fk->name, record_prev->Repr(), record_updated->Repr()
+                            "Foreign key constraint {} failed in update record {} to {}; Referenced by table {}",
+                            fk->name, record_prev->Repr(), record_updated->Repr(),
+                            table_name_map.right.find(parent_table_id)->second
                     };
                 }
-
             }
         }
     }
 
-    CheckConstraintInsert(meta, record_updated);
+    // foreign key: as parent table, tuple must exist in the reference table
+    for (const auto &fk: meta.foreign_keys) {
+        // if any of the fields is NULL then the check is skipped
+        auto record_projected{record_updated->Project(fk->ToVector())};
+        if (Record::HasNull(record_projected)) {
+            continue;
+        }
 
+        auto ret{
+                TupleExists(fk->reference_table, fk->ReferenceToVector(), record_projected)};
+        if (!ret) {
+            throw OperationError{
+                    "Foreign key constraint {} failed in record {}; Tuple not found in refernce table {} ",
+                    fk->name, record_updated->Repr(), table_name_map.right.find(fk->reference_table)->second
+            };
+        }
+    }
+
+    // check not null
+    for (auto fid: affected) {
+        if (record_updated->fields[fid]->is_null && meta.field_meta.meta[fid]->not_null) {
+            throw OperationError{"Not NULL constraint failed; Column `{}` cannot be null",
+                                 meta.field_meta.meta[fid]->name};
+        }
+    }
+
+    // return true if unique constraint failed
+    auto check_unique_fail_with_changed{[&](const std::vector<FieldID> &target_fields) -> bool {
+        auto changed{false};
+
+        for (auto fid: target_fields) {
+            if (record_prev->fields[fid] != record_updated->fields[fid]) {
+                changed = true;
+                break;
+            }
+        }
+
+        if (changed) {
+            auto ret{TupleExists(table_id, target_fields, record_updated->Project(target_fields))};
+            if (ret) {
+                return true;
+            }
+        }
+        return false;
+    }};
+
+    // check unique
+    for (const auto &uk: meta.unique_keys) {
+        auto target{uk->ToVector()};
+        // if any of the fields is NULL then the check is skipped
+        auto record_projected{record_updated->Project(target)};
+        if (Record::HasNull(record_projected)) {
+            continue;
+        }
+
+        if (check_unique_fail_with_changed(target)) {
+            throw OperationError{
+                    "Unique key constraint failed; Duplicate entry in record {} ",
+                    record_updated->Repr()
+            };
+        }
+    }
+
+    // check primary key, implies not null and unique
+    if (meta.primary_key != nullptr) {
+        // not null
+        for (int i{0}; i < meta.primary_key->field_count; ++i) {
+            auto field_id{meta.primary_key->fields[i]};
+            if (record_updated->fields[field_id]->is_null) {
+                throw OperationError{"Primary key constraint failed; Column `{}` cannot be null",
+                                     meta.field_meta.meta[i]->name};
+            }
+        }
+
+        // unique
+        auto target{meta.primary_key->to_vector()};
+        if (check_unique_fail_with_changed(target)) {
+            throw OperationError{
+                    "Primary key constraint failed; Duplicate entry in record {} ",
+                    record_updated->Repr()
+            };
+        }
+    }
 }
 
 std::shared_ptr<Result> DBSystem::DescribeTable(const std::string &table_name) {
@@ -696,8 +796,9 @@ std::shared_ptr<Result> DBSystem::DescribeTable(const std::string &table_name) {
         assert(ref_name_iter != table_name_map.right.end());
         auto fk_reference_table_name{ref_name_iter->second};
         std::string fk_reference_fields;
+        auto ref_table_meta{GetTableMeta(fk->reference_table)};
         for (int i{0}; i < fk->field_count; ++i) {
-            fk_reference_fields += table_meta->field_meta.meta[fk->reference_fields[i]]->name;
+            fk_reference_fields += ref_table_meta->field_meta.meta[fk->reference_fields[i]]->name;
             if (i != fk->field_count - 1) {
                 fk_reference_fields += ", ";
             }
@@ -729,15 +830,15 @@ std::shared_ptr<Result> DBSystem::DescribeTable(const std::string &table_name) {
 }
 
 
-std::shared_ptr<OpNode> DBSystem::GetTrivialScanNode(TableID table_id, const std::shared_ptr<FilterCondition> &cond) {
+std::shared_ptr<ScanNode> DBSystem::GetTrivialScanNode(TableID table_id, const std::shared_ptr<FilterCondition> &cond) {
     return std::make_shared<TrivialScanNode>(buffer, meta_map[table_id], cond, table_data_fd[table_id]);
 }
 
 
-std::shared_ptr<OpNode> DBSystem::GetIndexScanNode(TableID table_id, std::vector<FieldID> field_ids,
-                                                   const std::shared_ptr<FilterCondition> &cond,
-                                                   const std::shared_ptr<IndexField> &key_start,
-                                                   const std::shared_ptr<IndexField> &key_end) {
+std::shared_ptr<ScanNode> DBSystem::GetIndexScanNode(TableID table_id, std::vector<FieldID> field_ids,
+                                                     const std::shared_ptr<FilterCondition> &cond,
+                                                     const std::shared_ptr<IndexField> &key_start,
+                                                     const std::shared_ptr<IndexField> &key_end) {
     auto index_file = GetIndexFile(table_id, field_ids);
     return std::make_shared<IndexScanNode>(buffer, meta_map[table_id], cond, table_data_fd[table_id], *index_file,
                                            key_start, key_end);
@@ -758,31 +859,28 @@ std::shared_ptr<Result> DBSystem::Insert(TableID table_id, RecordList &records) 
     return std::make_shared<TextResult>(fmt::format("{} record(s) inserted", records.size()));
 }
 
-std::shared_ptr<Result> DBSystem::Delete(TableID table_id, const std::shared_ptr<FilterCondition> &cond) {
+std::shared_ptr<Result> DBSystem::Delete(TableID table_id, const std::shared_ptr<AndCondition> &cond) {
     assert(cond != nullptr);
     auto data_fd{table_data_fd[table_id]};
-    auto &meta{*meta_map[table_id]};
+    auto &meta{meta_map[table_id]};
     std::size_t delete_counter{0};
-    for (PageID i{0}; i < meta.data_page_count; ++i) {
+
+    auto node{GetScanNodeByCondition(table_id, cond)};
+    auto positions{node->Positions()};
+
+    for (const auto [i, j]: positions) {
         auto page = buffer.ReadPage(data_fd, i);
-        page->Lock();
-        DataPage dp{page, meta};
-        RecordList ret;
-        for (FieldID j{0}; j < dp.header.slot_count; ++j) {
-            auto record{dp.Select(j)};
-            if (record != nullptr && (*cond)(record)) {
-                CheckConstraintDelete(meta, record);
+        DataPage dp{page, *meta};
+        auto record{dp.Select(j)};
+        CheckConstraintDelete(*meta, record);  // no page operations, so `dp` remains valid
 
-                ++delete_counter;
+        ++delete_counter;
 
-                // delete entries in index
-                DropRecordIndex(table_id, page->id, j, record);
+        // perform delete
+        dp.Delete(j);
 
-                // perform delete
-                dp.Delete(j);
-            }
-        }
-        page->Release();
+        // delete entries in index
+        DropRecordIndex(table_id, i, j, record);
     }
     return std::make_shared<TextResult>(fmt::format("{} record(s) deleted", delete_counter));
 }
@@ -795,7 +893,7 @@ void DBSystem::CheckOnUse() const {
 
 std::shared_ptr<Result>
 DBSystem::Update(TableID table_id, const std::vector<std::pair<std::shared_ptr<FieldMeta>,
-        std::shared_ptr<Field>>> &updates, const std::shared_ptr<FilterCondition> &cond) {
+        std::shared_ptr<Field>>> &updates, const std::shared_ptr<AndCondition> &cond) {
     auto data_fd{table_data_fd[table_id]};
     auto meta{meta_map[table_id]};
     std::size_t update_counter{0};
@@ -803,41 +901,33 @@ DBSystem::Update(TableID table_id, const std::vector<std::pair<std::shared_ptr<F
     for (const auto &[fm, val]: updates) {
         affected.insert(fm->field_id);
     }
+    auto node{GetScanNodeByCondition(table_id, cond)};
+    auto positions{node->Positions()};
 
-    // TODO: record_list
+    for (const auto [i, j]: positions) {
+        auto record{DataPage(buffer.ReadPage(data_fd, i), *meta).Select(j)};
+        auto updated_record{record->Copy()};
+        updated_record->Update(updates);
 
-    for (PageID i{0}; i < meta_map[table_id]->data_page_count; ++i) {
-        auto page = buffer.ReadPage(data_fd, i);
-        page->Lock();
-        DataPage dp{page, *meta};
-        RecordList ret;
-        for (FieldID j{0}; j < dp.header.slot_count; ++j) {
-            auto record{dp.Select(j)};
-            if (record != nullptr && (*cond)(record)) {
-                auto updated_record{record->Copy()};
-                updated_record->Update(updates);
+        // check for constraints
+        CheckConstraintUpdate(*meta, record, updated_record, affected);
 
-                // check for constraints
-                CheckConstraintUpdate(*meta, record, updated_record);
+        ++update_counter;
+        auto original_size{record->Size()};
+        if (updated_record->Size() > original_size) {
+            DropRecordIndex(table_id, i, j, record);
+            DataPage(buffer.ReadPage(data_fd, i), *meta).Delete(j);
+            InsertRecord(table_id, updated_record); // index inserted through this function
+        } else {  // in-place update
+            DataPage dp(buffer.ReadPage(data_fd, i), *meta);
+            dp.Update(j, updated_record);
 
-                ++update_counter;
-                auto original_size{record->Size()};
-                if (updated_record->Size() > original_size) {
-                    DropRecordIndex(table_id, page->id, j, record);
-                    dp.Delete(j);
-                    InsertRecord(table_id, updated_record); // index inserted through this function
-                } else {  // in-place update
-                    dp.Update(j, updated_record);
+            // update fsm
+            auto meta{meta_map[table_id]};
+            meta->fsm.UpdateFreeSpace(i, dp.header.free_space);
 
-                    // update fsm
-                    auto meta{meta_map[table_id]};
-                    meta->fsm.UpdateFreeSpace(dp.page->id, dp.header.free_space);
-
-                    UpdateInPlaceRecordIndex(affected, table_id, page->id, j, record, updated_record);
-                }
-            }
+            UpdateInPlaceRecordIndex(affected, table_id, i, j, record, updated_record);
         }
-        page->Release();
     }
     return std::make_shared<TextResult>(fmt::format("{} record(s) updated", update_counter));
 }
@@ -1112,10 +1202,11 @@ std::size_t DBSystem::TupleExists(TableID table_id, const std::vector<FieldID> &
     IndexScanNode node{
             buffer, meta_map[table_id], cond_ptr, data_fd, *index_file, index_key, index_key
     };
-    return node.All().size();
+    return node.Positions().size();
 }
 
 std::vector<std::pair<TableID, std::shared_ptr<ForeignKey>>> DBSystem::GetParentTables(TableID table_id) {
+    // GUARANTEE no page operations
     std::vector<std::pair<TableID, std::shared_ptr<ForeignKey>>> ret;
     for (const auto &[tid, meta]: meta_map) {
         for (const auto &fk: meta->foreign_keys) {
@@ -1148,7 +1239,7 @@ void DBSystem::AddUnique(std::shared_ptr<TableMeta> &meta, const std::vector<std
     auto it_opt{CheckRecordsUnique(meta->table_id, uk_field_vec)};
     if (it_opt.has_value()) {
         throw OperationError{
-                "Fail to create primary key; Duplicate entry {}",
+                "Fail to create unique key; Duplicate entry {}",
                 Record{it_opt.value()->Project(uk_field_vec)}.Repr()
         };
     }
@@ -1209,7 +1300,7 @@ void DBSystem::DropPrimaryKey(TableID table_id) {
 
 std::optional<std::shared_ptr<Record>>
 DBSystem::CheckRecordsUnique(TableID table_id, const std::vector<FieldID> &fields) {
-    auto root{GetTrivialScanNode(table_id, nullptr)};
+    std::shared_ptr<OpNode> root{GetTrivialScanNode(table_id, nullptr)};
     root = std::make_shared<SortNode>(root, fields);
     auto records = root->All();
     RecordEqual req{fields};
@@ -1221,7 +1312,8 @@ DBSystem::CheckRecordsUnique(TableID table_id, const std::vector<FieldID> &field
     return std::nullopt;
 }
 
-std::shared_ptr<OpNode> DBSystem::GetScanNodeByCondition(TableID table_id, const std::shared_ptr<AndCondition> &cond) {
+std::shared_ptr<ScanNode>
+DBSystem::GetScanNodeByCondition(TableID table_id, const std::shared_ptr<AndCondition> &cond) {
     // Iterate through table indexes
     auto table_meta{meta_map[table_id]};
     auto index_keys = table_meta->index_keys;

@@ -8,7 +8,7 @@
 #include <string>
 
 int main() {
-    init_logger();
+    init_logger(true);
 
 //    FileSystem::MakeDirectory(DB_DIR);
 //    std::filesystem::remove_all(DB_DIR);

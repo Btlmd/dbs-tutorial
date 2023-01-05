@@ -334,7 +334,7 @@ public:
     explicit JoinCondition(std::vector<JoinCond> conditions, JoinPair tables) :
             Condition{ConditionType::JOIN}, conditions{std::move(conditions)},
             tables{std::move(tables)} {
-        DebugLog << "Join Condition on tables (" << this->tables.first << ", "<< this->tables.second << ")";
+//        DebugLog << "Join Condition on tables (" << this->tables.first << ", "<< this->tables.second << ")";
         for (const auto&[l, r, cond]: this->conditions) {
             DebugLog << " - (" << l << ", " << r << ")";
         }

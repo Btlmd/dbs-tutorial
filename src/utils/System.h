@@ -69,7 +69,7 @@ ResultList ToResultList(const std::string &in_string, DBVisitor &visitor, bool p
 
 void inline process_input(const std::string &in_string, DBVisitor &visitor, bool beep = false) {
     try {
-        auto result_list{ToResultList(in_string, visitor, true)};
+        auto result_list{ToResultList(in_string, visitor, false)};
         for (auto &result_ptr: result_list) {
             std::cout << result_ptr->Display() << std::endl;
             std::cout.flush();
@@ -80,9 +80,11 @@ void inline process_input(const std::string &in_string, DBVisitor &visitor, bool
         }
         std::cout << e.what() << std::endl;
     }
+    // catch (...)
+    // left uncaught exception to upper level
 }
 
-void inline init_logger(boost::log::trivial::severity_level level=SEVERITY) {
+void inline init_logger(bool clog = false) {
     namespace logging = boost::log;
     namespace expr = boost::log::expressions;
     namespace sinks = boost::log::sinks;
@@ -100,12 +102,13 @@ void inline init_logger(boost::log::trivial::severity_level level=SEVERITY) {
                     )
             )
     );
-
-    backend->add_stream(
-            boost::shared_ptr<std::ostream>(
-                    &std::clog, boost::null_deleter()
-            )
-    );
+    if (clog) {
+        backend->add_stream(
+                boost::shared_ptr<std::ostream>(
+                        &std::clog, boost::null_deleter()
+                )
+        );
+    }
 
     // auto-flush
     backend->auto_flush(true);
@@ -119,7 +122,7 @@ void inline init_logger(boost::log::trivial::severity_level level=SEVERITY) {
             % expr::smessage
     );
     core->add_sink(sink);
-    core->set_filter(logging::trivial::severity >= level);
+    core->set_filter(logging::trivial::severity >= SEVERITY);
     logging::add_common_attributes();
 }
 

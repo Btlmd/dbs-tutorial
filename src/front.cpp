@@ -45,6 +45,9 @@ int main() {
     } catch (const std::exception &e) {
         std::cerr << "Unexpected error: " << e.what() << std::endl;
         return 1;
+    } catch (...) {
+        std::cerr << "Unexpected non-standard error occurred" << std::endl;
+        return 1;
     }
     return 0;
 }

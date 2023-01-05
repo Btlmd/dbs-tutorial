@@ -12,11 +12,17 @@
 #include <record/TableMeta.h>
 #include <index/IndexFile.h>
 
-class TrivialScanNode : public OpNode {
+class ScanNode: public OpNode {
+public:
+    ScanNode() : OpNode{{}} {}
+    virtual PositionList Positions() = 0;
+};
+
+class TrivialScanNode : public ScanNode {
 public:
     TrivialScanNode(BufferSystem &buffer, std::shared_ptr<const TableMeta> table_meta,
                     std::shared_ptr<FilterCondition> condition,
-                    FileID page_file) : OpNode{{}}, buffer{buffer}, condition{std::move(condition)},
+                    FileID page_file) : ScanNode{}, buffer{buffer}, condition{std::move(condition)},
                                         current_page{-1},
                                         data_fd{page_file}, meta{std::move(table_meta)} {}
 
@@ -48,6 +54,22 @@ public:
         return std::move(ret);
     }
 
+    PositionList Positions() override {
+        PositionList ret;
+        while(!Over()) {
+            ++current_page;
+            auto page = buffer.ReadPage(data_fd, current_page);
+            DataPage dp{page, *meta};
+            for (FieldID i{0}; i < dp.header.slot_count; ++i) {
+                auto record{dp.Select(i)};
+                if (record != nullptr && (condition == nullptr || (*condition)(record))) {
+                    ret.emplace_back(current_page, i);
+                }
+            }
+        }
+        return std::move(ret);
+    }
+
     ~TrivialScanNode() override = default;
 
 private:
@@ -62,12 +84,12 @@ private:
  ** Given [key_start, key_end], use index_file to find location at key_start first
  * Once the record > key_end, stop
  */
-class IndexScanNode : public OpNode {
+class IndexScanNode : public ScanNode {
    public:
     IndexScanNode(BufferSystem& buffer, std::shared_ptr<const TableMeta> table_meta,
                     std::shared_ptr<FilterCondition> condition,
                     FileID page_file, IndexFile& index_file, const std::shared_ptr<IndexField>& key_start, const std::shared_ptr<IndexField>& key_end) :
-                                            OpNode{{}}, buffer{buffer}, condition{std::move(condition)},
+                                            ScanNode{}, buffer{buffer}, condition{std::move(condition)},
                                             data_fd{page_file}, meta{std::move(table_meta)}, index_file{index_file},
                                             key_start(key_start), key_end(key_end) {
         iter = index_file.SelectRecord(key_start);
@@ -80,6 +102,38 @@ class IndexScanNode : public OpNode {
 
     [[nodiscard]] bool Over() const override {
         return iter.first == -1;
+    }
+
+    [[nodiscard]] PositionList Positions() override {
+        PositionList ret;
+        while (!Over()) {
+            auto slot_id = iter.second;
+            auto child_cnt = index_file.Page(iter.first)->ChildCount();
+
+            for (; iter.second < child_cnt; ++iter.second) {
+                std::shared_ptr<IndexRecordLeaf> leaf_record = index_file.Select(iter);
+                assert (leaf_record != nullptr);
+
+                if (*(leaf_record->key) > *key_end) {
+                    iter.first = -1;
+                    return std::move(ret);
+                }
+
+                auto page = buffer.ReadPage(data_fd, leaf_record->page_id);
+                DataPage dp{page, *meta};
+
+                auto record{dp.Select(leaf_record->slot_id)};
+                if (record != nullptr && (condition == nullptr || (*condition)(record))) {
+                    ret.emplace_back(leaf_record->page_id, leaf_record->slot_id);
+                }
+            }
+
+            if (iter.second == child_cnt) {
+                iter.first = index_file.Page(iter.first)->NextPage();
+                iter.second = 0;
+            }
+        }
+        return std::move(ret);
     }
 
     RecordList Next() override {
@@ -126,6 +180,5 @@ class IndexScanNode : public OpNode {
     const std::shared_ptr<IndexField> key_start, key_end;
 
 };
-
 
 #endif //DBS_TUTORIAL_SCANNODE_H

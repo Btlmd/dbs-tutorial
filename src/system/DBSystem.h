@@ -21,6 +21,7 @@
 #include <record/TableMeta.h>
 #include <record/DataPage.h>
 #include <node/OpNode.h>
+#include <node/ScanNode.h>
 #include <system/WhereConditions.h>
 #include <index/IndexFile.h>
 
@@ -80,7 +81,7 @@ public:
      * @param cond
      * @return
      */
-    std::shared_ptr<Result> Delete(TableID table_id, const std::shared_ptr<FilterCondition> &cond);
+    std::shared_ptr<Result> Delete(TableID table_id, const std::shared_ptr<AndCondition> &cond);
 
     /**
      * Generate a `TrivialScanNode` from given table_id and filter condition
@@ -88,11 +89,11 @@ public:
      * @param cond
      * @return
      */
-    std::shared_ptr<OpNode> GetTrivialScanNode(TableID table_id, const std::shared_ptr<FilterCondition> &cond);
-    std::shared_ptr<OpNode> GetIndexScanNode(TableID table_id, std::vector<FieldID> field_ids, const std::shared_ptr<FilterCondition> &cond,
+    std::shared_ptr<ScanNode> GetTrivialScanNode(TableID table_id, const std::shared_ptr<FilterCondition> &cond);
+    std::shared_ptr<ScanNode> GetIndexScanNode(TableID table_id, std::vector<FieldID> field_ids, const std::shared_ptr<FilterCondition> &cond,
                                              const std::shared_ptr<IndexField>& key_start, const std::shared_ptr<IndexField>& key_end);
 
-    std::shared_ptr<OpNode> GetScanNodeByCondition(TableID table_id, const std::shared_ptr<AndCondition> &cond);
+    std::shared_ptr<ScanNode> GetScanNodeByCondition(TableID table_id, const std::shared_ptr<AndCondition> &cond);
 
     /**
      * Select from execution tree
@@ -111,7 +112,7 @@ public:
 
     std::shared_ptr<Result>
     Update(TableID table_id, const std::vector<std::pair<std::shared_ptr<FieldMeta>, std::shared_ptr<Field>>> &updates,
-           const std::shared_ptr<FilterCondition> &cond);
+           const std::shared_ptr<AndCondition> &cond);
 
     /**
      * Validate that the record satisfies all constraints specified by `meta`
@@ -127,7 +128,12 @@ public:
      * @param record_prev
      * @param record_updated
      */
-    void CheckConstraintUpdate(const TableMeta &meta, const std::shared_ptr<Record> &record_prev, const std::shared_ptr<Record> &record_updated);
+    void CheckConstraintUpdate(
+            const TableMeta &meta,
+            const std::shared_ptr<Record> &record_prev,
+            const std::shared_ptr<Record> &record_updated,
+            const std::unordered_set<FieldID> &affected
+    );
 
     /**
      * Validate that the deletion does not break any constraint

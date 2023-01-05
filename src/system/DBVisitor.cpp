@@ -38,11 +38,15 @@ antlrcpp::Any DBVisitor::visitProgram(SQLParser::ProgramContext *ctx) {
     for (auto &child: ctx->children) {
         auto stmt_ctx{dynamic_cast<SQLParser::StatementContext *>(child)};
         if (stmt_ctx && !stmt_ctx->Annotation() && !stmt_ctx->Null()) {
-//            DebugLog << "Process query: " << child->getText();
             auto begin{std::chrono::high_resolution_clock::now()};
             antlrcpp::Any result{child->accept(this)};
             std::chrono::duration<double> elapse{std::chrono::high_resolution_clock::now() - begin};
-            auto result_ptr{result.as<std::shared_ptr<Result>>()};
+            std::shared_ptr<Result> result_ptr;
+            try {
+                result_ptr = result.as<std::shared_ptr<Result>>();
+            } catch (std::bad_cast &) {
+                throw OperationError{"Unsupported Operation"};
+            }
             result_ptr->SetRuntime(elapse.count());
             results->emplace_back(result_ptr);
         }
@@ -196,10 +200,7 @@ antlrcpp::Any DBVisitor::visitInsert_into_table(SQLParser::Insert_into_tableCont
             auto value_list{insertions[row]->value()};
             auto friendly_row{row + 1};  // adjust to human convention
             if (value_list.size() != field_count) {
-                throw OperationError{
-                        "Column count doesn't match value count at row {}",
-                        friendly_row
-                };
+                throw OperationError{"Column count doesn't match value count"};
             }
             std::vector<std::shared_ptr<Field>> fields;
             for (int i{0}; i < field_count; ++i) {
@@ -208,8 +209,7 @@ antlrcpp::Any DBVisitor::visitInsert_into_table(SQLParser::Insert_into_tableCont
             auto record{std::make_shared<Record>(std::move(fields))};
             records.push_back(record);
         } catch (OperationError &e) {
-            auto msg{e.what()};
-            throw OperationError{"At row {}, {}", row, msg};
+            throw OperationError{"At row {}, {}", row + 1, e.what()};
         }
     }
     return system.Insert(table_id, records);
@@ -307,8 +307,10 @@ antlrcpp::Any DBVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) 
                 if (join_cond->conditions.empty()) {
                     join_cond = nullptr;
                 }
+                DebugLog << fmt::format("Hash Join @ table {}", i);
                 join_root = std::make_shared<HashJoinNode>(join_root, table_scanners[selected_tables[i]], hash_cond, join_cond);
             } else {  // does not exist EqCmp, use nested loop join
+                DebugLog << fmt::format("Nested Join @ table {}", i);
                 join_root = std::make_shared<NestedJoinNode>(join_root, table_scanners[selected_tables[i]], join_cond);
             }
         }
@@ -372,11 +374,13 @@ antlrcpp::Any DBVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) 
     // when aggregator exists, basic column not quantified by GROUP BY is forbidden
     if (has_aggregator) {
         for (FieldID i{0}; i < columns.size(); ++i) {
-            if (columns[i]->type == ColumnType::BASIC && group_by_col >= 0 && *columns[i] != *group_by_ptr) {
-                auto friendly_pos{i + 1};
+            if (columns[i]->type == ColumnType::BASIC) {
+                if (group_by_col >= 0 && *columns[i] == *group_by_ptr) {
+                    continue;
+                }
                 throw OperationError{
                         "Expression #{} of SELECT list is not in GROUP BY clause and contains nonaggregated column `{}`",
-                        friendly_pos,
+                        i + 1,
                         header[i]
                 };
             }
@@ -570,6 +574,15 @@ antlrcpp::Any DBVisitor::visitWhere_operator_expression(SQLParser::Where_operato
     }
     if (ctx->expression()->column()) {
         auto r_col{ctx->expression()->column()->accept(this).as<std::shared_ptr<Column>>()};
+        if (field_meta->type != r_col->field_meta->type) {
+            throw OperationError{
+                "Type mismatch in {}.{} and {}.{}",
+                system.GetTableMeta(col->table_id)->table_name,
+                col->field_meta->name,
+                system.GetTableMeta(r_col->table_id)->table_name,
+                r_col->field_meta->name
+            };
+        }
         if (r_col->table_id == table_id) {
             return make_cond<FieldCmpCondition>(table_id, field_meta->field_id, r_col->field_meta->field_id,
                                                 comparer);

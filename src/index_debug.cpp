@@ -12,7 +12,7 @@
 #include <index/IndexFile.h>
 
 int main() {
-    init_logger(boost::log::trivial::severity_level::debug);
+    init_logger(true);
     FileSystem::RemoveDirectory(DB_DIR);
     FileSystem::MakeDirectory(DB_DIR);
     FileID index_file_fd = FileSystem::NewFile(DB_DIR / "test_index_file.bin");

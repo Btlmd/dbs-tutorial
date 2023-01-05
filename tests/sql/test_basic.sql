@@ -1,5 +1,3 @@
-
-DROP DATABASE test_db;
 CREATE DATABASE test_db;
 USE test_db;
 
@@ -71,7 +69,7 @@ UPDATE info SET C1 = 999 WHERE info.C1 < 5;
 
 SELECT * FROM info;
 
-DELETE FROM info where info.C1 = 999;
+DELETE FROM info WHERE info.C1 = 999;
 
 SELECT * FROM info;
 

@@ -17,6 +17,12 @@ class TableMeta;
 
 class Record;
 
+struct Position{
+    PageID page;
+    SlotID slot;
+    Position(PageID page, SlotID slot): page{page}, slot{slot} {}
+};
+typedef std::vector<Position> PositionList;
 typedef std::vector<std::shared_ptr<Record>> RecordList;
 
 class Record {
@@ -109,6 +115,11 @@ public:
             fields_new.push_back(fields[pos]);
         }
         return std::move(fields_new);
+    }
+
+    static bool HasNull(const std::vector<std::shared_ptr<Field>>& target_reference) {
+        return std::any_of(target_reference.begin(), target_reference.end(),
+                    [](const std::shared_ptr<Field> &f) { return f->is_null; });
     }
 
     bool operator == (const Record& rhs) const {
