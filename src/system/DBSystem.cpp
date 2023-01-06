@@ -367,21 +367,29 @@ void DBSystem::AddForeignKey(std::shared_ptr<TableMeta> &meta, const RawForeignK
             fk_name += fmt::format("{}_", fk->reference_fields[i]);
         }
     }
-
     if (fk_name.size() > CONSTRAINT_NAME_LEN_MAX) {
         throw OperationError{"Identifier name `{}` is too long", fk_name};
     }
-
     for (const auto &table_fk: meta->foreign_keys) {
         if (table_fk->name == fk_name) {
             throw OperationError{"Duplicate foreign key name `{}`", fk_name};
         }
     }
-
     fk_name.copy(fk->name, fk_name.size(), 0);
 
     auto ch_fields{fk->ToVector()};
     auto ref_fields{fk->ReferenceToVector()};
+
+    // special requirement: columns in the reference table must exactly match the primary key
+    if (reference_meta->primary_key == nullptr) {
+        throw OperationError{"No primary key in reference table `{}`", reference_meta->table_name};
+    }
+    if (reference_meta->primary_key->to_vector() != ref_fields) {
+        throw OperationError{
+            "Columns specified as reference does not match primary key of `{}`",
+            reference_meta->table_name
+        };
+    }
 
     // Build Index
     AddIndexLimited<2>(meta->table_id, ch_fields, false);

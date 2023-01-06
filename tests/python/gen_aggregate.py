@@ -2,8 +2,8 @@ from random_gen import *
 
 if __name__ == "__main__":
     sql = """    
-    CREATE DATABASE test_db;
-    USE test_db;
+    CREATE DATABASE test_db0;
+    USE test_db0;
 
 CREATE TABLE INFO(C1 INT, C2 INT, C3 FLOAT, C4 VARCHAR(10));
 INSERT INTO INFO VALUES (1, 8, -3.0, 'A');
@@ -99,6 +99,7 @@ SELECT INFO.C4, MIN(INFO.C1), MAX(INFO.C1), AVG(INFO.C1), SUM(INFO.C1), SUM(INFO
     SELECT COUNT(*), COUNT(crafted.A), COUNT(crafted.B), COUNT(crafted.C), COUNT(crafted.D) FROM crafted; 
     SELECT MAX(crafted.A), MAX(crafted.B), MAX(crafted.C), MAX(crafted.D) FROM crafted; 
     SELECT AVG(crafted.A), AVG(crafted.B), AVG(crafted.C), AVG(crafted.D) FROM crafted; 
+    SELECT AVG(crafted.A), AVG(crafted.B), crafted.C, AVG(crafted.D) FROM crafted GROUP BY crafted.C; 
     
     SELECT SUM(info.C2), AVG(info.C2), MAX(info.C2), MIN(info.C2), COUNT(*), COUNT(info.C2), info.C1 FROM info WHERE info.C1 > 5 AND info.C5 < 35 GROUP BY info.C1;
 

@@ -11,6 +11,7 @@
 #include <compare>
 
 #include <boost/algorithm/string.hpp>
+#include <boost/date_time/gregorian/gregorian.hpp>
 
 #include <defines.h>
 #include <utils/Serialization.h>
@@ -278,26 +279,20 @@ public:
     int value;
 
     static int StringToDateInt(const std::string &date_format) {
-        std::vector<std::string> result;
-        boost::split(result, date_format, boost::is_any_of("-"));
-        int value{0};
-        if (result.size() == 3) {
-            value += std::stoi(result[0]) * 1'0000;
-            value += std::stoi(result[1]) * 100;
-            value += std::stoi(result[2]);
-            return value;
-        } else {
-            throw OperationError{"Invalid date string {}", date_format};
+        // check if the date is valid
+        boost::gregorian::date date;
+        try{
+            date = boost::gregorian::from_simple_string(date_format);
+        } catch (std::exception &e) {
+            throw OperationError{"{}", e.what()};
         }
+        return date.day_number();
     }
 
     static std::string DateIntToString(int value) {
-        return fmt::format(
-                "{:04d}-{:02d}-{:02d}",
-                value % 1'0000'0000 / 1'0000,
-                value % 1'0000 / 100,
-                value % 100
-        );
+        auto ymd{boost::gregorian::gregorian_calendar::from_day_number(value)};
+        boost::gregorian::date date{ymd.year, ymd.month, ymd.day};
+        return boost::gregorian::to_iso_extended_string(date);
     }
 
     explicit Date(int value) : Field{FieldType::DATE}, value{value} {}
@@ -377,7 +372,7 @@ public:
         return data;
     }
 
-    ~String() = default;
+    ~String() override = default;
 
     [[nodiscard]] std::size_t Hash() const override {
         return hash(data);
@@ -394,7 +389,7 @@ public:
      */
     Char(std::string str_data, RecordSize max_len) : String{std::move(str_data), FieldType::CHAR}, max_len{max_len} {}
 
-    ~Char() = default;
+    ~Char() override = default;
 
     static std::shared_ptr<Char> FromSrc(const uint8_t *&src, RecordSize max_len) {
         std::string buffer;
@@ -424,7 +419,7 @@ public:
      */
     explicit VarChar(std::string str_data) : String{std::move(str_data), FieldType::VARCHAR} {}
 
-    ~VarChar() = default;
+    ~VarChar() override = default;
 
     static std::shared_ptr<VarChar> FromSrc(const uint8_t *&src) {
         std::string buffer;

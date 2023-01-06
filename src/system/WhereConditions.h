@@ -17,6 +17,26 @@
 #include <regex>
 
 #include <boost/algorithm/string.hpp>
+#include <magic_enum.hpp>
+
+inline void MatchType(FieldType lhs_type, FieldType rhs_type) {
+    if (rhs_type == FieldType::INT || rhs_type == FieldType::FLOAT ||
+        rhs_type == FieldType::DATE) {  // types that must exact match
+        if (rhs_type != lhs_type) {
+            throw OperationError{
+                    "Mismatched type {} and {}",
+                    magic_enum::enum_name(lhs_type), magic_enum::enum_name(rhs_type)
+            };
+        }
+    } else { // string type
+        if (lhs_type != FieldType::VARCHAR && lhs_type != FieldType::CHAR) {
+            throw OperationError{
+                    "Mismatched type {} and {}",
+                    magic_enum::enum_name(lhs_type), magic_enum::enum_name(rhs_type)
+            };
+        }
+    }
+}
 
 /**
  * Algebraic Compare Operators
@@ -271,8 +291,12 @@ inline ValueList ToValueList(const SelectPlan &select_plan) {
  */
 class InSubQueryCondition : public ValueInListCondition {
 public:
-    InSubQueryCondition(const SelectPlan &select_plan, TableID table_id, FieldID pos) :
-            ValueInListCondition{ToValueList(select_plan), table_id, pos} {}
+    InSubQueryCondition(const SelectPlan &select_plan, TableID table_id, FieldID pos, FieldType lhs_type) :
+            ValueInListCondition{ToValueList(select_plan), table_id, pos} {
+        if (!value_list.empty()) {
+            MatchType(lhs_type, value_list[0]->type);
+        }
+    }
 };
 
 /**
@@ -284,7 +308,7 @@ public:
     std::shared_ptr<Field> value;
     std::shared_ptr<Cmp> cmp;
 
-    CompareSubQueryCondition(const SelectPlan &select_plan, TableID table_id, FieldID pos, std::shared_ptr<Cmp> cmp) :
+    CompareSubQueryCondition(const SelectPlan &select_plan, TableID table_id, FieldID pos, std::shared_ptr<Cmp> cmp, FieldType lhs_type) :
             FilterCondition{table_id}, field_position{pos}, cmp{std::move(cmp)} {
         auto value_list{ToValueList(select_plan)};
         if (value_list.size() > 1) {
@@ -292,6 +316,7 @@ public:
         }
         if (value_list.size() == 1) {
             value = value_list[0];
+            MatchType(lhs_type, value->type);
         } else {
             value = nullptr;
         }
@@ -335,7 +360,7 @@ public:
             Condition{ConditionType::JOIN}, conditions{std::move(conditions)},
             tables{std::move(tables)} {
 //        DebugLog << "Join Condition on tables (" << this->tables.first << ", "<< this->tables.second << ")";
-        for (const auto&[l, r, cond]: this->conditions) {
+        for (const auto &[l, r, cond]: this->conditions) {
             DebugLog << " - (" << l << ", " << r << ")";
         }
     }
@@ -369,7 +394,7 @@ public:
     }
 
     static std::shared_ptr<JoinCondition>
-    Merge(const std::vector<std::shared_ptr<JoinCondition>> &conditions, const JoinPair& tables) {
+    Merge(const std::vector<std::shared_ptr<JoinCondition>> &conditions, const JoinPair &tables) {
         std::vector<JoinCond> accu;
         for (const auto &cond: conditions) {
             std::copy(cond->conditions.begin(), cond->conditions.end(), std::back_inserter(accu));

@@ -602,7 +602,7 @@ antlrcpp::Any DBVisitor::visitWhere_operator_select(SQLParser::Where_operator_se
     auto field_meta{col->field_meta};
     auto select_plan{ctx->select_table()->accept(this).as<SelectPlan>()};
     return make_cond<CompareSubQueryCondition>(
-            select_plan, table_id, field_meta->field_id, ConvertOperator(ctx->operator_())
+            select_plan, table_id, field_meta->field_id, ConvertOperator(ctx->operator_()), field_meta->type
     );
 }
 
@@ -619,7 +619,7 @@ antlrcpp::Any DBVisitor::visitWhere_in_select(SQLParser::Where_in_selectContext 
     auto table_id{col->table_id};
     auto field_meta{col->field_meta};
     auto select_plan{ctx->select_table()->accept(this).as<SelectPlan>()};
-    return make_cond<InSubQueryCondition>(select_plan, table_id, field_meta->field_id);
+    return make_cond<InSubQueryCondition>(select_plan, table_id, field_meta->field_id, field_meta->type);
 }
 
 antlrcpp::Any DBVisitor::visitWhere_like_string(SQLParser::Where_like_stringContext *ctx) {

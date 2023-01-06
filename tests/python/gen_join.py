@@ -2,8 +2,8 @@ from random_gen import *
 
 if __name__ == "__main__":
     sql = """
-    CREATE DATABASE test_db;
-    USE test_db;
+    CREATE DATABASE test_db3;
+    USE test_db3;
     
     CREATE TABLE info (
         C1 INT DEFAULT 10,

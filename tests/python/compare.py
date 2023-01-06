@@ -5,6 +5,21 @@ import decimal
 import datetime
 from pathlib import Path
 
+class NullableTuple(tuple):
+    def __lt__(self, other):
+        for i, j in zip(self, other):
+            if i is None and j is None:
+                continue
+            if i is None:
+                return True
+            if j is None:
+                return False
+            if i == j:
+                continue
+            return i < j
+        return False
+
+
 def round_resp(rows):
     rows = list(map(list, rows))
     for row in rows:
@@ -15,6 +30,7 @@ def round_resp(rows):
                 row[i] = round(row[i], 3)
             if isinstance(row[i], datetime.date):
                 row[i] = str(row[i])
+    rows = map(NullableTuple, rows)
     rows = sorted(rows)
     return rows
 

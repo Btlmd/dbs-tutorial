@@ -14,14 +14,45 @@ if __name__ == "__main__":
         C5 INT NOT NULL 
     );
     
-    {}    
+    {insert1}
+    
+    SELECT * FROM info;
+    
+    UPDATE info SET C5 = 255, C3 = '{long_char}' WHERE info.C2 < 50;
+    
+    SELECT * FROM info;
+    
+    DELETE FROM info WHERE info.C5 < 5;
+    
+    SELECT * FROM info;
+    
+    {insert2}
+    
+    SELECT * FROM info;
+    
+    DELETE FROM info WHERE info.C5 > 35;
+    
+    SELECT * FROM info;
+
+    UPDATE info SET C5 = 255, C3 = '{long_char}' WHERE info.C2 > 50;
+    
+    SELECT * FROM info;
+        
+    DELETE FROM info WHERE info.C5 < 15;
+    
+    SELECT * FROM info;
+        
     """
 
     insert_sql = ""
+    template = [partial(i, 0, 4000) ,f, s(20), s(50), i]
+    insert_sql += gen_insertions(template, 'info', 100_000, show_tqdm=True)
 
-    template = [partial(i, 0, 4000) ,f, s(50), s(50), i]
-    insert_sql += gen_insertions(template, 'info', 1_000_000, show_tqdm=True)
-    print(sql.format(insert_sql))
+    insert_sql2 = ""
+    template = [partial(i, 0, 4000) ,f, s(5), s(20), i]  # into previous used slots
+    insert_sql2 += gen_insertions(template, 'info', 100_000, show_tqdm=True)
+
+    print(sql.format(insert1=insert_sql, insert2=insert_sql2, long_char='a'*50))
 
 
 
