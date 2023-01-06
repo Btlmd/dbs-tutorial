@@ -49,9 +49,37 @@ public:
     RecordList Next() override {
         aggregated = true;
 
-        // sort downstream records
         RecordList records{children[0]->All()};
         auto record_len{static_cast<FieldID>(aggregators.size())};
+        RecordList ret;
+
+        // special case: empty record list
+        if (records.empty() && group_by_col < 0) {
+            std::vector<std::shared_ptr<Field>> ag;
+            for (FieldID i{0}; i < aggregators.size(); ++i) {
+
+                auto &col{aggregators[i]};
+                switch (col->type) {
+                    case ColumnType::BASIC:
+                        assert(false);  // no group by here
+                    case ColumnType::COUNT:
+                    case ColumnType::COUNT_REC:
+                        ag.push_back(std::make_shared<Int>(0));
+                        break;
+                    case ColumnType::MAX:
+                    case ColumnType::MIN:
+                    case ColumnType::AVG:
+                    case ColumnType::SUM:
+                        auto typed{Field::MakeNull(col->field_meta->type, col->field_meta->max_size)};
+                        ag.push_back(typed);
+                        break;
+                }
+            }
+            ret.push_back(std::make_shared<Record>(ag));
+            return std::move(ret);
+        }
+
+        // sort downstream records
         FieldCompare comp;
         if (group_by_col >= 0) {
             // sort by the last field
@@ -73,8 +101,6 @@ public:
 //
 //        };
 //#endif
-
-        RecordList ret;
 
         auto curr{records.begin()}, boarder{records.begin()}, ptr{records.begin()};
         while (curr != records.end()) {
