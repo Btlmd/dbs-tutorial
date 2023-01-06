@@ -403,7 +403,7 @@ void DBSystem::AddForeignKey(std::shared_ptr<TableMeta> &meta, const RawForeignK
                 if (ref_table->All().empty()) {
                     // Drop Index if constraint fails
                     DropIndexLimited<2>(meta->table_id, fk->ToVector(), false);
-                    DropIndexLimited<2>(meta->table_id, fk->ReferenceToVector(), false);
+                    DropIndexLimited<2>(fk->reference_table, fk->ReferenceToVector(), false);
                     throw OperationError{
                             "Fail to create foreign key, record {} found no match in reference table",
                             ch_recond->Repr()
@@ -969,9 +969,9 @@ std::shared_ptr<Result> DBSystem::AddIndex(TableID table_id, const std::vector<F
     new_index->field_count = 0;
     new_index->user_created = false;
     new_index->reference_count = 0;  // 1 if system-created, 0 if user-created
-    if (!is_user) {
-        new_index->reference_count = 1;
-    }
+//    if (!is_user) {
+//        new_index->reference_count = 1;
+//    }
 
     for (const auto &field_id: field_ids) {
         new_index->fields[new_index->field_count++] = field_id;
@@ -1283,7 +1283,7 @@ void DBSystem::DropForeignKey(TableID table_id, const std::string &fk_name) {
     }
 
     DropIndexLimited<2>(table_id, (*it)->ToVector(), false);
-    DropIndexLimited<2>(table_id, (*it)->ReferenceToVector(), false);
+    DropIndexLimited<2>((*it)->reference_table, (*it)->ReferenceToVector(), false);
 
     fks.erase(it);
 }
