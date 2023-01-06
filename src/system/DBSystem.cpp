@@ -752,10 +752,17 @@ std::shared_ptr<Result> DBSystem::DescribeTable(const std::string &table_name) {
         if (fm->type == FieldType::CHAR || fm->type == FieldType::VARCHAR) {
             type_name += fmt::format("({})", fm->max_size);
         }
+        auto fm_not_null{fm->not_null};
+        if (table_meta->primary_key != nullptr) {
+            auto pk_vec{table_meta->primary_key->to_vector()};
+            if (std::find(pk_vec.begin(), pk_vec.end(), fm->field_id) != pk_vec.end()) {
+                fm_not_null = true;
+            }
+        }
         field_detail.push_back({
                                        fm->name,
                                        type_name,
-                                       fm->not_null ? "NO" : "YES",
+                                       fm_not_null ? "NO" : "YES",
                                        fm->has_default ? fm->default_value->ToString() : "NULL"
                                });
     }

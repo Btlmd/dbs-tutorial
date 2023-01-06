@@ -46,6 +46,7 @@
 #include <exception/OperationException.h>
 
 ResultList ToResultList(const std::string &in_string, DBVisitor &visitor, bool parsing_time = false) {
+    InfoLog << in_string.substr(0, 1024);
     auto begin{std::chrono::high_resolution_clock::now()};
     antlr4::ANTLRInputStream input{in_string};
     SQLLexer lexer{&input};
@@ -78,7 +79,7 @@ void inline process_input(const std::string &in_string, DBVisitor &visitor, bool
         if (beep) {
             std::cout << '\a';
         }
-        std::cout << e.what() << std::endl;
+        std::cout << "Error: " << e.what() << std::endl;
     }
     // catch (...)
     // left uncaught exception to upper level
