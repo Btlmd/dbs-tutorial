@@ -7,6 +7,7 @@
 
 #include <memory>
 #include <unordered_map>
+#include <utility>
 
 #include <record/Field.h>
 #include <node/OpNode.h>
@@ -24,7 +25,7 @@ public:
     FieldID left_pos;
     FieldID right_pos;
 
-    bool Acceptable(const std::shared_ptr<JoinCondition> &cond) {
+    static bool Acceptable(const std::shared_ptr<JoinCondition> &cond) {
         return cond->conditions.size() == 1 && dynamic_pointer_cast<EqCmp>(std::get<2>(cond->conditions[0]));
     }
 
@@ -43,7 +44,7 @@ public:
     }
 
     HashJoinNode(std::shared_ptr<OpNode> lhs, std::shared_ptr<OpNode> rhs, std::shared_ptr<JoinCondition> hash_cond, std::shared_ptr<JoinCondition> other_cond) :
-            OpNode{{std::move(lhs), std::move(rhs)}}, hash_cond{std::move(hash_cond)}, other_cond{other_cond}, called{false} {
+            OpNode{{std::move(lhs), std::move(rhs)}}, hash_cond{std::move(hash_cond)}, other_cond{std::move(other_cond)}, called{false} {
         assert(Acceptable(this->hash_cond));
     }
 

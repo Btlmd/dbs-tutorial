@@ -45,9 +45,9 @@ execute_process(COMMAND ${PROJECT_SOURCE_DIR}/utils/generate_grammar.sh)
 file(GLOB_RECURSE dbms_source src/**/*.cpp)
 
 ## `main` static library
-add_library(main STATIC ${dbms_source})
-target_link_libraries(main ${LIBS})
-target_include_directories(main PUBLIC src)
+#add_library(main STATIC ${dbms_source})
+#target_link_libraries(main ${LIBS})
+#target_include_directories(main PUBLIC src)
 
 # `main` shared library
 add_library(main_shared SHARED ${dbms_source})
@@ -69,7 +69,7 @@ target_link_libraries(convert ${LIBS})
 target_include_directories(convert PUBLIC src)
 
 add_executable(index_debug src/index_debug.cpp)
-target_link_libraries(index_debug main)
+target_link_libraries(index_debug main_shared)
 
 FIND_PACKAGE(PythonInterp)
 FIND_PACKAGE(Boost COMPONENTS python${PYTHON_VERSION_SUFFIX})

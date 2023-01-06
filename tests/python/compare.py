@@ -4,6 +4,9 @@ import connect_db
 import decimal
 import datetime
 from pathlib import Path
+import os
+
+os.chdir(Path(__file__).resolve().parent)
 
 class NullableTuple(tuple):
     def __lt__(self, other):
@@ -25,7 +28,7 @@ def round_resp(rows):
     for row in rows:
         for i in range(len(row)):
             if isinstance(row[i], decimal.Decimal):
-                row[i] = float(row[i])
+                row[i] = round(float(row[i]), 3)
             if isinstance(row[i], float):
                 row[i] = round(row[i], 3)
             if isinstance(row[i], datetime.date):
@@ -126,9 +129,10 @@ if __name__ == "__main__":
                 print(d['resp'])
         print()
 
-    print("failed queries")
-    for idx, q in failures:
-        print("%d: %s" % (idx, q))
+    if len(failures):
+        print("failed queries")
+        for idx, q in failures:
+            print("%d: %s" % (idx, q))
 
     if fail:
         exit(1)

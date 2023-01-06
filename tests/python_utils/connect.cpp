@@ -20,9 +20,13 @@ typedef std::vector<std::string> StringList;
 
 using namespace boost::python;
 
+#include <unistd.h>
+
 list query(std::string query) {
-    FileSystem::MakeDirectory(DB_DIR);
-    std::filesystem::remove_all(DB_DIR);
+//    FileSystem::MakeDirectory(DB_DIR);
+//    std::filesystem::remove_all(DB_DIR);
+    char cwd[PATH_MAX];
+    std::cout << getcwd(cwd, PATH_MAX) << std::endl;
 
     auto dbms = DBSystem{};
     DBVisitor visitor{dbms};

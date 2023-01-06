@@ -263,20 +263,64 @@ antlrcpp::Any DBVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) 
     }
 
     // join tables
-    std::vector<FieldID> table_offset{0};
+    std::vector<TableID> join_sequence{selected_tables[0]};
+    std::vector<FieldID> table_offset{0};  // corresponding to join_sequence
     if (selected_tables.size() > 1) {  // construct join nodes
-        std::vector<std::shared_ptr<const TableMeta>> selected_table_metas;
-        for (const auto &table_id: selected_tables) {
-            selected_table_metas.push_back(system.GetTableMeta(table_id));
+        std::unordered_set<TableID> to_be_joined;
+        for (TableID i{1}; i < selected_tables.size(); ++i) {  // mark [1: n-1] as "to be joined"
+            to_be_joined.insert(selected_tables[i]);
         }
-        for (FieldID i{1}; i < selected_tables.size(); ++i) {
-            table_offset[i] = table_offset[i - 1] + selected_table_metas[i - 1]->field_meta.Count();
+
+        // determine join order to use as many hash node as possible
+        while (join_sequence.size() != selected_tables.size()) {
+            // find a connected table
+            bool found{false};
+            for (auto joined_tid: join_sequence) {  // for all joined tables
+                bool found_this_round{false};
+                for (auto it1{to_be_joined.begin()}; it1 != to_be_joined.end(); ++it1) { // for all not-joined table
+                    auto cond_tables{std::make_pair(joined_tid, *it1)};
+                    auto rev_cond_tables{std::make_pair(*it1, joined_tid)};
+                    auto [same_order_it, same_order_end]{joins.equal_range(cond_tables)};
+                    auto [rev_order_it, rev_order_end]{joins.equal_range(rev_cond_tables)};
+                    if (same_order_it != same_order_end || rev_order_it != rev_order_end) {
+                        found = true;
+                        found_this_round = true;
+                        join_sequence.push_back(*it1);
+                        to_be_joined.erase(it1);
+                        break;
+                    }
+                }
+                if (found_this_round) {
+                    break;
+                }
+            }
+            if (!found) {
+                DebugLog << "[disconnected!]";
+                // not a connected graph
+                for (auto it2{to_be_joined.begin()}; it2 != to_be_joined.end(); ++it2) {
+                    // all append
+                    join_sequence.push_back(*it2);
+                }
+                to_be_joined.clear();
+                break;
+            }
         }
-        std::shared_ptr<OpNode> join_root{table_scanners[selected_tables[0]]};
-        for (TableID i{1} /* index in selected_tables */; i < selected_tables.size(); ++i) {
+        assert(join_sequence.size() == selected_tables.size());
+        assert(to_be_joined.empty());
+
+
+        std::vector<std::shared_ptr<const TableMeta>> join_table_metas;
+        for (const auto &table_id: join_sequence) {
+            join_table_metas.push_back(system.GetTableMeta(table_id));
+        }
+        for (FieldID i{1}; i < join_sequence.size(); ++i) {
+            table_offset[i] = table_offset[i - 1] + join_table_metas[i - 1]->field_meta.Count();
+        }
+        std::shared_ptr<OpNode> join_root{table_scanners[join_sequence[0]]};
+        for (TableID i{1} /* index in join_sequence */; i < join_sequence.size(); ++i) {
             std::vector<std::shared_ptr<JoinCondition>> join_conds_i;
             for (TableID j{0}/* pointer to previous tables */; j < i; ++j) {
-                auto cond_tables{std::make_pair(selected_tables[j], selected_tables[i])};
+                auto cond_tables{std::make_pair(join_sequence[j], join_sequence[i])};
                 auto rev_cond_tables{std::make_pair(cond_tables.second, cond_tables.first)};
                 // same ordered conditions
                 for (auto [it, end]{joins.equal_range(cond_tables)}; it != end; ++it) {
@@ -295,7 +339,7 @@ antlrcpp::Any DBVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) 
                     join_conds_i.push_back(it->second);
                 }
             }
-            auto join_cond{JoinCondition::Merge(join_conds_i, JoinPair{-1, selected_tables[i]})};
+            auto join_cond{JoinCondition::Merge(join_conds_i, JoinPair{-1, join_sequence[i]})};
             // try construct hash join node
             auto it{std::find_if(join_cond->conditions.begin(), join_cond->conditions.end(),
                                  [](const JoinCond &jc) -> bool {
@@ -308,10 +352,11 @@ antlrcpp::Any DBVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) 
                     join_cond = nullptr;
                 }
                 DebugLog << fmt::format("Hash Join @ table {}", i);
-                join_root = std::make_shared<HashJoinNode>(join_root, table_scanners[selected_tables[i]], hash_cond, join_cond);
+                join_root = std::make_shared<HashJoinNode>(join_root, table_scanners[join_sequence[i]], hash_cond,
+                                                           join_cond);
             } else {  // does not exist EqCmp, use nested loop join
                 DebugLog << fmt::format("Nested Join @ table {}", i);
-                join_root = std::make_shared<NestedJoinNode>(join_root, table_scanners[selected_tables[i]], join_cond);
+                join_root = std::make_shared<NestedJoinNode>(join_root, table_scanners[join_sequence[i]], join_cond);
             }
         }
         root = join_root;
@@ -322,8 +367,8 @@ antlrcpp::Any DBVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) 
 
     // map from `table_id` to table position in sequence
     std::map<TableID, TableID> table_mapping;
-    for (TableID i{0}; i < selected_tables.size(); ++i) {
-        table_mapping.insert({selected_tables[i], i});
+    for (TableID i{0}; i < join_sequence.size(); ++i) {
+        table_mapping.insert({join_sequence[i], i});
     }
 
     // transform selectors
@@ -336,7 +381,7 @@ antlrcpp::Any DBVisitor::visitSelect_table(SQLParser::Select_tableContext *ctx) 
             auto table_meta{system.GetTableMeta(selected_tables[i])};
             for (const auto &field: table_meta->field_meta.meta) {
                 header.push_back(table_meta->table_name + "." + field->name);
-                target.push_back(table_offset[i] + field->field_id);
+                target.push_back(table_offset[table_pos] + field->field_id);
                 columns.push_back(std::make_shared<Column>(selected_tables[i], field));
             }
         }
@@ -576,11 +621,11 @@ antlrcpp::Any DBVisitor::visitWhere_operator_expression(SQLParser::Where_operato
         auto r_col{ctx->expression()->column()->accept(this).as<std::shared_ptr<Column>>()};
         if (field_meta->type != r_col->field_meta->type) {
             throw OperationError{
-                "Type mismatch in {}.{} and {}.{}",
-                system.GetTableMeta(col->table_id)->table_name,
-                col->field_meta->name,
-                system.GetTableMeta(r_col->table_id)->table_name,
-                r_col->field_meta->name
+                    "Type mismatch in {}.{} and {}.{}",
+                    system.GetTableMeta(col->table_id)->table_name,
+                    col->field_meta->name,
+                    system.GetTableMeta(r_col->table_id)->table_name,
+                    r_col->field_meta->name
             };
         }
         if (r_col->table_id == table_id) {
